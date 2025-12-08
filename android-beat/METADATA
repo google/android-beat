@@ -1,0 +1,13 @@
+# go/google3metadata
+# proto-file: devtools/metadata/metadata.proto
+# proto-message: MetaData
+
+exported: {
+  copybara: {
+    config_path: "//depot/google3/devtools/bettertogether/feature/bluetooth/git/copy.bara.sky"
+  }
+  path_expression: "//depot/google3/devtools/bettertogether/feature/bluetooth/git/..."
+  remote_location: "https://github.com/google/android-beat"
+  reason: OPEN_SOURCE
+  description: "Bluetooth End-to-end Automation Tests"
+}
