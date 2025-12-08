@@ -1,0 +1,82 @@
+"""Copybara configuration for exporting Bluetooth tests to GitHub.
+
+GitHub Repository: https://github.com/google/android-beat.
+"""
+
+google3_path = "google3/devtools/bettertogether/feature/bluetooth/git"
+
+# List of files to include from Piper.
+# We include all files except BUILD files.
+origin_files = glob(
+    include = [google3_path + "/**"],
+    exclude = [
+        google3_path + "/**/BUILD",
+        google3_path + "/**/METADATA",
+    ],
+)
+
+# Destination folder in the git repository.
+destination_folder = "bluetooth"
+destination_files = glob([destination_folder + "/**"])
+
+transformations = [
+    # Move files from google3/ path to destination_folder
+    core.move(google3_path, destination_folder),
+
+    # Rewrite internal imports to use new package structure
+    # from google3.devtools.bettertogether.feature.bluetooth.git import foo -> from bluetooth import foo
+    core.replace(
+        before = "from google3.devtools.bettertogether.feature.bluetooth.git import",
+        after = "from " + destination_folder + " import",
+        paths = glob(["**.py"]),
+    ),
+    core.replace(
+        before = "from google3.devtools.bettertogether.feature.bluetooth.git.platforms.bluetooth import",
+        after = "from bluetooth import",
+        paths = glob(["**.py"]),
+    ),
+    core.replace(
+        before = "mobly_g3",
+        after = "test_runner",
+        paths = glob(["**.py"]),
+    ),
+
+    # The following google3 imports do not have obvious OSS replacements and
+    # may cause issues in the OSS build:
+    # - google3.testing.mobly.platforms.bluetooth.bluetooth_reference_device
+    # - google3.testing.mobly.platforms.bluetooth.tws_device
+    # These imports may need to be transformed to point to equivalent
+    # libraries in Mobly or android-beat, or the code using them commented out or adapted.
+    # If equivalent libraries exist under mobly.platforms in OSS, you could
+    # uncomment the following transformation:
+    # core.replace(
+    #    before = "google3.testing.mobly.platforms.",
+    #    after = "mobly.platforms.",
+    #    paths = glob(["**.py"]),
+    # ),
+
+    # Check for leaks like confidential markers or TODOs assigned to Googlers.
+    leakr.check(),
+]
+
+# Workflow for exporting from Piper to a Git destination.
+# This workflow does not run as a service and must be triggered manually via CLI.
+#
+# To run this workflow, use the following command from a Piper client:
+# copybara devtools/bettertogether/feature/bluetooth/git/copy.bara.sky piper_to_git --force
+core.workflow(
+    name = "piper_to_git",
+    origin = piper.origin(),
+    origin_files = origin_files,
+    destination = git.github_pr_destination(
+        url = "https://github.com/google/android-beat",
+        destination_ref = "main",
+        pr_branch = "copybara_${CONTEXT_REFERENCE}",
+        title = "Sync changes from internal dev branch.",
+        body = "",
+    ),
+    authoring = authoring.overwrite("BeTo Team <noreply@google.com>"),
+    transformations = transformations,
+    destination_files = destination_files,
+    mode = "SQUASH",  # Squash all Piper changes into a single Git commit
+)

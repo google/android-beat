@@ -1,0 +1,86 @@
+"""
+Copybara config for syncing Mobly Bluetooth libs to BES controller git repo source.
+
+To sync files directly into platforms folder in your workspace, run this from google3/:
+/google/bin/releases/copybara/public/copybara/copybara devtools/bettertogether/feature/bluetooth/git/platforms/copy.bara.sky default . --folder-dir . --squash
+
+To mark copied files as branched in fig client after syncing, run:
+BASE_DEST="devtools/bettertogether/feature/bluetooth/git/platforms/bluetooth"
+BASE_ORIGIN="testing/mobly/platforms/bluetooth"
+for f in $(find $BASE_DEST -type f -not -path "$BASE_DEST/validation/*"); do
+  orig_file="$BASE_ORIGIN/${f#$BASE_DEST/}"
+  hg cp --after $orig_file $f
+done
+
+If you want to sync to a temporary folder first, run:
+/google/bin/releases/copybara/public/copybara/copybara devtools/bettertogether/feature/bluetooth/git/platforms/copy.bara.sky default . --folder-dir /tmp/platforms_output --squash
+cp -Rf /tmp/platforms_output/. .
+"""
+
+origin_path = "testing/mobly/platforms/bluetooth"
+destination_path = "devtools/bettertogether/feature/bluetooth/git/platforms/bluetooth"
+
+core.workflow(
+    name = "default",
+    origin = folder.origin(),
+    destination = folder.destination(),
+    authoring = authoring.overwrite("BeTo Feature Team <no-reply@google.com>"),
+    origin_files = glob(
+        include = [origin_path + "/**"],
+        exclude = [
+            origin_path + "/**_test.py",
+            origin_path + "/validation/**",
+        ],
+    ),
+    destination_files = glob(
+        include = [destination_path + "/**"],
+        exclude = [
+            destination_path + "/validation/**",
+        ],
+    ),
+    transformations = [
+        core.move(origin_path, destination_path, overwrite = True),
+        core.replace(
+            before = "google3.testing.mobly.",
+            after = "google3.devtools.bettertogether.feature.bluetooth.git.",
+            paths = glob(["**.py"]),
+        ),
+        core.replace(
+            before = "//testing/mobly/platforms/bluetooth",
+            after = "//devtools/bettertogether/feature/bluetooth/git/platforms/bluetooth",
+            paths = glob(["**/BUILD"]),
+        ),
+    ],
+    mode = "SQUASH",
+)
+
+core.workflow(
+    name = "common",
+    origin = folder.origin(),
+    destination = folder.destination(),
+    authoring = authoring.overwrite("BeTo Feature Team <no-reply@google.com>"),
+    origin_files = glob(
+        include = ["testing/mobly/platforms/common/**"],
+        exclude = [
+            "testing/mobly/platforms/common/*_test.py",
+            "testing/mobly/platforms/common/**/*_test.py",
+        ],
+    ),
+    destination_files = glob(
+        include = ["devtools/bettertogether/feature/bluetooth/git/platforms/common/**"],
+    ),
+    transformations = [
+        core.move("testing/mobly/platforms/common", "devtools/bettertogether/feature/bluetooth/git/platforms/common", overwrite = True),
+        core.replace(
+            before = "google3.testing.mobly.platforms.cros",
+            after = "google3.devtools.bettertogether.feature.bluetooth.git.platforms.cros",
+            paths = glob(["**.py"]),
+        ),
+        core.replace(
+            before = "//testing/mobly/platforms/cros",
+            after = "//devtools/bettertogether/feature/bluetooth/git/platforms/cros",
+            paths = glob(["**/BUILD"]),
+        ),
+    ],
+    mode = "SQUASH",
+)
