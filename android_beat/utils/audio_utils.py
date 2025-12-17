@@ -477,3 +477,14 @@ def assert_has_audio_start_time(
           ' on the BES device failed.'
       ),
   )
+
+
+def wait_and_assert_recording_has_ble_headset(
+    ad: android_device.AndroidDevice,
+) -> None:
+  """Waits for and asserts BLE headset is ready for recording."""
+  test_utils.wait_until_or_assert(
+      condition=ad.bt_snippet.mediaHasBleHeadset,
+      error_msg='Failed to detect BLE headset.',
+      timeout=_RECORDING_STATE_TIMEOUT,
+  )
