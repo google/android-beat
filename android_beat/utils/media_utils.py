@@ -28,3 +28,40 @@ class VolumeDirection(enum.IntEnum):
   ADJUST_SAME = 0
   ADJUST_RAISE = 1
   ADJUST_MUTE = -100
+
+
+@enum.unique
+class AudioUsage(enum.IntEnum):
+  """Audio usage types from android.media.AudioAttributes.
+
+  https://developer.android.com/reference/android/media/AudioAttributes
+
+  Attributes:
+    USAGE_MEDIA: Usage value to use when the usage is media, such as music, or
+      movie soundtracks.
+    USAGE_GAME: Usage value to use when the usage is for game audio.
+  """
+
+  USAGE_MEDIA = 1
+  USAGE_GAME = 14
+
+
+@enum.unique
+class AudioContentType(enum.IntEnum):
+  """Audio content types from android.media.AudioAttributes.
+
+  https://developer.android.com/reference/android/media/AudioAttributes
+
+  Attributes:
+    CONTENT_TYPE_UNKNOWN: Content type value to use when the content type is
+      unknown, or other than the ones defined.
+    CONTENT_TYPE_MUSIC: Content type value to use when the content type is
+      music.
+    CONTENT_TYPE_MOVIE: Content type value to use when the content type is the
+      audio typically accompanying a movie or TV program, containing a mix of
+      dialogue, music and sound effects.
+  """
+
+  CONTENT_TYPE_UNKNOWN = 0
+  CONTENT_TYPE_MUSIC = 2
+  CONTENT_TYPE_MOVIE = 3
