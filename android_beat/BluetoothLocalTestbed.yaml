@@ -1,0 +1,28 @@
+TestBeds:
+- Name: BluetoothLocalTestbed
+  Controllers:
+    AndroidDevice: '*'
+    BluetoothReferenceDevice:
+      - controller_name: 'TwsDevice'
+        controller_type: 'BesDevice'
+        primary_ear: 'RIGHT'
+        left_config:
+          remote_mode: false
+          serial_port: 'COM8'
+          bluetooth_address: '11:11:22:33:33:50'
+          audio_configs:
+            pcm_name: 'hw:0,0'
+            sample_rate: 8000
+            sample_format: 'S16_LE'
+            channels: 2
+        right_config:
+          remote_mode: false
+          serial_port: 'COM3'
+          bluetooth_address: '11:11:22:33:33:51'
+          audio_configs:
+            pcm_name: 'hw:1,0'
+            sample_rate: 8000
+            sample_format: 'S16_LE'
+            channels: 2
+MoblyParams:
+  LogPath: 'C:/User/testuser/AppData/Local/Temp'
