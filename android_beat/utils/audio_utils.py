@@ -21,6 +21,7 @@ import logging
 import math
 import os
 import pathlib
+import sys
 import time
 
 import librosa
@@ -146,7 +147,9 @@ def generate_and_push_audio_files(
 def start_audio_recording(
     bt_device: tws_device.TwsDevice,
 ) -> None:
-  """Starts audio recording on the Bluetooth device."""
+  """Starts audio recording on the Bluetooth device if the platform is Linux."""
+  if sys.platform != 'linux':
+    return
   bt_device.start_audio_recording()
 
 
@@ -161,11 +164,15 @@ def stop_audio_recording(
     output_path: The host path to save the recorded audio files.
 
   Returns:
-    A list of paths to the recorded audio files on the host.
+    A list of paths to the recorded audio files on the host, or None if not on
+    Linux.
 
   Raises:
     signals.TestFailure: If no audio files were recorded.
   """
+  if sys.platform != 'linux':
+    return None
+
   recorded_audio_files_on_host = bt_device.stop_audio_recording(
       output_path
   )

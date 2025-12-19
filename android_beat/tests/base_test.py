@@ -148,7 +148,12 @@ class BaseTestClass(base_test.BaseTestClass):
     self.bt_devices = self.register_controller(bluetooth_reference_device)
     mobly_utils.concurrent_exec(
         lambda d: d.factory_reset(),
-        [[bt_device] for bt_device in self.bt_devices],
+        ([bt_device] for bt_device in self.bt_devices),
+        raise_on_exception=True,
+    )
+    mobly_utils.concurrent_exec(
+        lambda d: d.set_component_number(2),
+        ([bt_device] for bt_device in self.bt_devices),
         raise_on_exception=True,
     )
     self.bt_device = self.bt_devices[0]
@@ -174,6 +179,6 @@ class BaseTestClass(base_test.BaseTestClass):
     bluetooth_utils.clear_saved_devices(self.ad)
     mobly_utils.concurrent_exec(
         lambda d: d.factory_reset(),
-        [[bt_device] for bt_device in self.bt_devices],
+        ([bt_device] for bt_device in self.bt_devices),
         raise_on_exception=True,
     )
