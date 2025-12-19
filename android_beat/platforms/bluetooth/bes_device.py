@@ -647,7 +647,11 @@ class BesDevice(bluetooth_reference_device_base.BluetoothReferenceDeviceBase):
       )
     self._wait_and_log_board_time(self._output_filename)
 
-  def _send_bes_command(self, command: str, wait_response: bool = True) -> str:
+  def _send_bes_command(
+      self,
+      command: str | enum.StrEnum,
+      wait_response: bool = True
+  ) -> str:
     """Sends the serial command to the BES devboard."""
     if self._publisher is None:
       raise BesDeviceError(_PUBLISHER_NOT_STARTED_MESSAGE)

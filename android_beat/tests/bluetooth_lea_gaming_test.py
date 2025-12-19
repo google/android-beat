@@ -14,7 +14,6 @@
 
 """Bluetooth LEA gaming streaming test."""
 
-import contextlib
 import datetime
 import time
 
@@ -25,6 +24,7 @@ from android_beat.tests import base_test
 from android_beat.utils import audio_utils
 from android_beat.utils import bluetooth_utils
 from android_beat.utils import media_utils
+from android_beat.utils import recording_utils
 from android_beat.utils import test_utils
 
 _MEDIA_PLAY_TIME = datetime.timedelta(seconds=15)
@@ -32,9 +32,6 @@ _MEDIA_DEVICE_TYPE_TIMEOUT = datetime.timedelta(seconds=30)
 _MEDIA_STATE_TIMEOUT = datetime.timedelta(seconds=30)
 _RECORDING_DURATION = datetime.timedelta(seconds=10)
 _RECORDING_STATE_TIMEOUT = datetime.timedelta(seconds=30)
-
-_RECORDING_FILE_NAME = 'test_recording.mp4'
-_RECORDING_FILE_PATH = '/storage/emulated/0/Android/data/com.google.snippet.bluetooth/cache/test_recording.mp4'
 _MEDIA_FILES_BASENAMES = ('sine_tone_0.wav',)
 _MEDIA_FILES_PATHS = ('/sdcard/Download/sine_tone_0.wav',)
 
@@ -56,26 +53,6 @@ class BluetoothLeaGamingTest(base_test.BaseTestClass):
         audio_utils.AudioDeviceType.TYPE_BLE_HEADSET,
         expect_active=True,
     )
-
-  @contextlib.contextmanager
-  def _record_audio(self):
-    """Context manager to start and stop audio recording."""
-    self.ad.log.info('Starting VBC test: Activating microphone recording.')
-    try:
-      self.ad.bt_snippet.mediaStartRecording(_RECORDING_FILE_NAME)
-      self.ad.log.info(
-          'Audio input devices: %s',
-          self.ad.bt_snippet.mediaGetActiveMicrophones(),
-      )
-      yield
-    finally:
-      output_path = self.ad.bt_snippet.mediaStopRecording()
-      asserts.assert_equal(
-          output_path,
-          _RECORDING_FILE_PATH,
-          f'Expected path {_RECORDING_FILE_PATH}, got {output_path}',
-      )
-      self.ad.log.info('Stopped recording.')
 
   def setup_class(self) -> None:
     super().setup_class()
@@ -214,7 +191,7 @@ class BluetoothLeaGamingTest(base_test.BaseTestClass):
         timeout=_MEDIA_DEVICE_TYPE_TIMEOUT,
     )
 
-    with self._record_audio():
+    with recording_utils.record_audio_context(self.ad):
       time.sleep(_RECORDING_DURATION.total_seconds())  # Record for 10 seconds
       test_utils.wait_until_or_assert(
           condition=self.ad.bt_snippet.mediaIsRecording,
@@ -325,7 +302,7 @@ class BluetoothLeaGamingTest(base_test.BaseTestClass):
         current_volume, target_volume, 'Failed to set music volume.'
     )
 
-    with self._record_audio():
+    with recording_utils.record_audio_context(self.ad):
       test_utils.wait_until_or_assert(
           condition=self.ad.bt_snippet.mediaIsRecording,
           error_msg='Media is not recording',
@@ -374,7 +351,9 @@ class BluetoothLeaGamingTest(base_test.BaseTestClass):
       )
 
       self.ad.log.info('Reactivating microphone recording after power cycle.')
-      self.ad.bt_snippet.mediaStartRecording(_RECORDING_FILE_NAME)
+      self.ad.bt_snippet.mediaStartRecording(
+          recording_utils.RECORDING_FILE_NAME
+      )
       time.sleep(_RECORDING_DURATION.total_seconds())  # Record for 10 seconds
       test_utils.wait_until_or_assert(
           condition=self.ad.bt_snippet.mediaIsRecording,

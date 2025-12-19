@@ -16,7 +16,6 @@
 
 import datetime
 import os
-import sys
 import time
 
 from mobly import asserts
@@ -210,8 +209,7 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
         timeout=_EVENT_WAIT_TIMEOUT,
     )
     time.sleep(_MEDIA_ACTION_WAIT_TIME.total_seconds())
-    if sys.platform == 'linux':
-      audio_utils.start_audio_recording(self.bt_device)
+    audio_utils.start_audio_recording(self.bt_device)
     test_utils.wait_until_or_assert(
         condition=lambda: self.ad.bt_snippet.media3GetCurrentTrackIndex() == 1,
         error_msg='Failed to advance to track index 1.',
@@ -225,15 +223,14 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
         timeout=_MEDIA_DEVICE_TYPE_TIMEOUT,
     )
     time.sleep(_MEDIA_PLAY_TIME_WITH_RECORDING.total_seconds())
-    if sys.platform == 'linux':
-      recorded_audio_files_on_host = audio_utils.stop_audio_recording(
-          self.bt_device, self.current_test_info.output_path
-      )
-      audio_utils.assert_has_audio_start_time(
-          self.generate_audio_file_paths[1],
-          recorded_audio_files_on_host,
-      )
-      self.ad.log.info('Track index is updated to 1.')
+    recorded_audio_files_on_host = audio_utils.stop_audio_recording(
+        self.bt_device, self.current_test_info.output_path
+    )
+    audio_utils.assert_has_audio_start_time(
+        self.generate_audio_file_paths[1],
+        recorded_audio_files_on_host,
+    )
+    self.ad.log.info('Track index is updated to 1.')
 
     self.ad.log.info('Sending NEXT from BT device (to index 1)...')
 
@@ -244,8 +241,7 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
         timeout=_EVENT_WAIT_TIMEOUT,
     )
     time.sleep(_MEDIA_ACTION_WAIT_TIME.total_seconds())
-    if sys.platform == 'linux':
-      audio_utils.start_audio_recording(self.bt_device)
+    audio_utils.start_audio_recording(self.bt_device)
     test_utils.wait_until_or_assert(
         condition=lambda: self.ad.bt_snippet.media3GetCurrentTrackIndex() == 1,
         error_msg='Index changed from last track.',
@@ -259,14 +255,13 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
         timeout=_MEDIA_DEVICE_TYPE_TIMEOUT,
     )
     time.sleep(_MEDIA_PLAY_TIME_WITH_RECORDING.total_seconds())
-    if sys.platform == 'linux':
-      recorded_audio_files_on_host = audio_utils.stop_audio_recording(
-          self.bt_device, self.current_test_info.output_path
-      )
-      audio_utils.assert_has_audio_start_time(
-          self.generate_audio_file_paths[1],
-          recorded_audio_files_on_host,
-      )
+    recorded_audio_files_on_host = audio_utils.stop_audio_recording(
+        self.bt_device, self.current_test_info.output_path
+    )
+    audio_utils.assert_has_audio_start_time(
+        self.generate_audio_file_paths[1],
+        recorded_audio_files_on_host,
+    )
     self.ad.log.info('Track index is remains 1.')
 
     self.ad.log.info('Sending PREVIOUS from BT device (to index 0)...')
@@ -281,8 +276,7 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
         timeout=_EVENT_WAIT_TIMEOUT,
     )
     time.sleep(_MEDIA_ACTION_WAIT_TIME.total_seconds())
-    if sys.platform == 'linux':
-      audio_utils.start_audio_recording(self.bt_device)
+    audio_utils.start_audio_recording(self.bt_device)
     test_utils.wait_until_or_assert(
         condition=lambda: self.ad.bt_snippet.media3GetCurrentTrackIndex() == 0,
         error_msg='Failed to go back to track index 0.',
@@ -296,14 +290,13 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
         timeout=_MEDIA_DEVICE_TYPE_TIMEOUT,
     )
     time.sleep(_MEDIA_PLAY_TIME_WITH_RECORDING.total_seconds())
-    if sys.platform == 'linux':
-      recorded_audio_files_on_host = audio_utils.stop_audio_recording(
-          self.bt_device, self.current_test_info.output_path
-      )
-      audio_utils.assert_has_audio_start_time(
-          self.generate_audio_file_paths[0],
-          recorded_audio_files_on_host,
-      )
+    recorded_audio_files_on_host = audio_utils.stop_audio_recording(
+        self.bt_device, self.current_test_info.output_path
+    )
+    audio_utils.assert_has_audio_start_time(
+        self.generate_audio_file_paths[0],
+        recorded_audio_files_on_host,
+    )
     self.ad.log.info('Track index is updated to 0.')
 
     self.ad.log.info('Sending PREVIOUS from BT device (at first track)...')
@@ -318,8 +311,7 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
         timeout=_EVENT_WAIT_TIMEOUT,
     )
     time.sleep(_MEDIA_ACTION_WAIT_TIME.total_seconds())
-    if sys.platform == 'linux':
-      audio_utils.start_audio_recording(self.bt_device)
+    audio_utils.start_audio_recording(self.bt_device)
     test_utils.wait_until_or_assert(
         condition=lambda: self.ad.bt_snippet.media3GetCurrentTrackIndex() == 0,
         error_msg='Index changed from first track.',
@@ -333,14 +325,13 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
         timeout=_MEDIA_DEVICE_TYPE_TIMEOUT,
     )
     time.sleep(_MEDIA_PLAY_TIME_WITH_RECORDING.total_seconds())
-    if sys.platform == 'linux':
-      recorded_audio_files_on_host = audio_utils.stop_audio_recording(
-          self.bt_device, self.current_test_info.output_path
-      )
-      audio_utils.assert_has_audio_start_time(
-          self.generate_audio_file_paths[0],
-          recorded_audio_files_on_host,
-      )
+    recorded_audio_files_on_host = audio_utils.stop_audio_recording(
+        self.bt_device, self.current_test_info.output_path
+    )
+    audio_utils.assert_has_audio_start_time(
+        self.generate_audio_file_paths[0],
+        recorded_audio_files_on_host,
+    )
     self.ad.log.info('Track index is remains 0.')
 
   def test_lea_volume_control_from_android_device(self):
