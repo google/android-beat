@@ -1,0 +1,13 @@
+dacite
+immutabledict
+librosa
+mobly
+numpy
+paramiko
+pyserial
+python-dateutil
+requests
+resources
+scipy
+tenacity
+typing-extensions
