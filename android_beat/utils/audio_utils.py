@@ -15,6 +15,7 @@
 """Utility functions related to Audio operations."""
 
 from collections.abc import Sequence
+import contextlib
 import datetime
 import enum
 import logging
@@ -31,6 +32,7 @@ import numpy
 import scipy
 
 from android_beat.platforms.bluetooth import tws_device
+from android_beat.utils import bluetooth_utils
 from android_beat.utils import test_utils
 
 
@@ -39,7 +41,7 @@ _VOLUME_SETTLE_TIME = datetime.timedelta(seconds=60)
 _RECORDING_STATE_TIMEOUT = datetime.timedelta(seconds=30)
 _FREQUENCY = 1000.0
 _MEDIA_LOCAL_PARENT_PATH = '/sdcard/Download'
-_MEDIA_MUSIC_LENGTH = datetime.timedelta(seconds=15)
+_MEDIA_MUSIC_LENGTH = datetime.timedelta(seconds=120)
 _VOLUME_DELAY_TIME = datetime.timedelta(seconds=0.3)
 
 
@@ -232,6 +234,22 @@ def wait_and_assert_volume_down_to_min(
       ),
       timeout=_VOLUME_SETTLE_TIME,
   )
+
+
+@contextlib.contextmanager
+def assert_a2dp_playback_stopped(
+    ad: android_device.AndroidDevice, bt_device: tws_device.TwsDevice
+):
+  """Context manager to assert A2DP playback is stopped."""
+  try:
+    yield
+  finally:
+    ad.bt_snippet.media3Stop()
+    bluetooth_utils.wait_and_assert_a2dp_playback_state(
+        ad,
+        bt_device.bluetooth_address_primary,
+        expect_active=False,
+    )
 
 SAMPLE_RATE = 44100  # Default audio sample rate.
 CROSS_CORRELATION_THRESHOLD = 0.9
