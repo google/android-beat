@@ -109,6 +109,7 @@ def generate_and_push_audio_files(
     ad: android_device.AndroidDevice,
     playlist_files: Sequence[str],
     local_source_audio_path: str,
+    media_length: datetime.timedelta = _MEDIA_MUSIC_LENGTH,
 ) -> None:
   """Generates audio files and pushes to the device.
 
@@ -116,6 +117,7 @@ def generate_and_push_audio_files(
     ad: The Android device that needs to push audio files.
     playlist_files: A list of audio file names that need to be generated.
     local_source_audio_path: The path of the local audio file.
+    media_length: The duration of each audio file to generate.
   """
   ad.adb.shell(['rm', '-rf', f'{_MEDIA_LOCAL_PARENT_PATH}/*'])
   frequency = _FREQUENCY
@@ -131,7 +133,7 @@ def generate_and_push_audio_files(
     generate_sine_tone_file(
         frequency,
         magnitude=0.5,
-        duration=_MEDIA_MUSIC_LENGTH,
+        duration=media_length,
         filename=local_source_audio_path_with_file_name,
     )
     frequency += 500.0

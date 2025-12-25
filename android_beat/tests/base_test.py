@@ -79,6 +79,9 @@ class BaseTestClass(base_test.BaseTestClass):
   ads: list[android_device.AndroidDevice]
   bt_device: tws_device.TwsDevice
   bt_devices: list[tws_device.TwsDevice]
+  ad_address: str
+  ad_ref_address: str | None
+  ad_ter_address: str | None
   file_tag: str
 
   def _setup_android_device(self, ad: android_device.AndroidDevice) -> None:
@@ -143,6 +146,10 @@ class BaseTestClass(base_test.BaseTestClass):
         [[ad] for ad in self.ads],
         raise_on_exception=True,
     )
+
+    self.ad_address = self.ads[0].bt_snippet.btGetAddress()
+    self.ad_ref_address, self.ad_ter_address = None, None
+
     self.ad = self.ads[0]
 
     self.bt_devices = self.register_controller(bluetooth_reference_device)
