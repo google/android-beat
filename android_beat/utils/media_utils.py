@@ -14,7 +14,12 @@
 
 """Utility functions related to Media operations."""
 
+import datetime
 import enum
+from mobly.controllers import android_device
+from android_beat.utils import test_utils
+
+_GET_MEDIA_ROUTER_TYPE_TIMEOUT = datetime.timedelta(seconds=30)
 
 
 @enum.unique
@@ -28,6 +33,19 @@ class VolumeDirection(enum.IntEnum):
   ADJUST_SAME = 0
   ADJUST_RAISE = 1
   ADJUST_MUTE = -100
+
+
+@enum.unique
+class MediaRouterType(enum.IntEnum):
+  """Enum class for media device type.
+
+  https://developer.android.com/reference/android/media/MediaRouter.RouteInfo
+  """
+
+  DEVICE_TYPE_UNKNOWN = 0
+  DEVICE_TYPE_TV = 1
+  DEVICE_TYPE_SPEAKER = 2
+  DEVICE_TYPE_BLUETOOTH = 3
 
 
 @enum.unique
@@ -65,3 +83,26 @@ class AudioContentType(enum.IntEnum):
   CONTENT_TYPE_UNKNOWN = 0
   CONTENT_TYPE_MUSIC = 2
   CONTENT_TYPE_MOVIE = 3
+
+
+def get_media_router_type(ad: android_device.AndroidDevice) -> MediaRouterType:
+  """Gets the specified media router type of device."""
+  return MediaRouterType(ad.bt_snippet.mediaGetLiveAudioRouteType())
+
+
+def wait_for_expected_media_router_type(
+    ad: android_device.AndroidDevice,
+    expected_media_router_type: MediaRouterType,
+    postfix_error_msg: str | None = None,
+    timeout: datetime.timedelta = _GET_MEDIA_ROUTER_TYPE_TIMEOUT,
+) -> None:
+  """Waits for media router type to be active or inactive."""
+  test_utils.wait_until_or_assert(
+      condition=lambda: get_media_router_type(ad) == expected_media_router_type,
+      error_msg=(
+          'Failed to get expected media router type'
+          f' {expected_media_router_type}, actual type is'
+          f' {get_media_router_type(ad)} {postfix_error_msg}'
+      ),
+      timeout=timeout,
+  )
