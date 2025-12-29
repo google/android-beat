@@ -1,7 +1,16 @@
 TestBeds:
 - Name: BluetoothLocalTestbed
   Controllers:
-    AndroidDevice: '*'
+    AndroidDevice:
+      - serial: 'localhost:5555'
+      dimensions:
+        model: 'pixel 9'
+        phone_number: '1234567890'
+    AndroidDevice:
+      - serial: 'localhost:5556'
+      dimensions:
+        model: 'pixel 9'
+        phone_number: '1234567891'
     BluetoothReferenceDevice:
       - controller_name: 'TwsDevice'
         controller_type: 'BesDevice'
