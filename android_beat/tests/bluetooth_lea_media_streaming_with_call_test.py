@@ -63,6 +63,8 @@ class BluetoothLeaMediaStreamingWithCallTest(base_test.BaseTestClass):
         self._MEDIA_FILES_NAMES,
         self.current_test_info.output_path,
     )
+    self.ad.phone_number = call_utils.get_phone_number(self.ad)
+    self.ad_ref.phone_number = call_utils.get_phone_number(self.ad_ref)
 
   def test_call_interrupt_media_streaming(self):
     """Call interrupt when media streaming.
