@@ -34,6 +34,7 @@ class BluetoothLeaConnectionTest(base_test.BaseTestClass):
 
   _BLUETOOTH_MODE = base_test.BluetoothMode.LEA
   _ANDROID_DEVICE_AMOUNT = base_test.AndroidDeviceAmount.SINGLE_DEVICE
+  _HAS_MEDIA = False
 
   def setup_test(self) -> None:
     asserts.skip_if(
@@ -78,7 +79,7 @@ class BluetoothLeaConnectionTest(base_test.BaseTestClass):
         timeout=_BLUETOOTH_DISCOVERY_TIMEOUT,
     )
 
-  def test_pairing(self):
+  def test_43_1_pairing(self):
     """Tests Bluetooth pairing.
 
     Objective:
@@ -133,7 +134,7 @@ class BluetoothLeaConnectionTest(base_test.BaseTestClass):
         expect_active=True,
     )
 
-  def test_unpairing(self):
+  def test_43_2_unpairing(self):
     """Tests Bluetooth unpairing.
 
     Objective:

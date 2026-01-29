@@ -14,24 +14,20 @@
 
 """Base test for Bluetooth."""
 
-import datetime
 import enum
-import time
 
 from mobly import asserts
 from mobly import base_test
 from mobly import records
 from mobly import utils as mobly_utils
 from mobly.controllers import android_device
-from mobly.controllers.android_device_lib import apk_utils
 
 from android_beat.platforms.bluetooth import bluetooth_reference_device
 from android_beat.platforms.bluetooth import tws_device
+from android_beat.utils import android_setup_utils
+from android_beat.utils import audio_utils
 from android_beat.utils import bluetooth_utils
-
-_DELAY_BETWEEN_BLUETOOTH_STATE_CHANGE = datetime.timedelta(seconds=5)
-
-_BLUETOOTH_SNIPPETS_PACKAGE = 'com.google.snippet.bluetooth'
+from android_beat.utils import call_utils
 
 
 @enum.unique
@@ -69,75 +65,53 @@ class BaseTestClass(base_test.BaseTestClass):
     ads: A list of Android devices used for testing.
     bt_device: The primary Bluetooth device under test.
     bt_devices: A list of Bluetooth devices used for testing.
-    file_tag: The file tag used to get the file path from user params.
   """
 
   _ANDROID_DEVICE_AMOUNT = AndroidDeviceAmount.SINGLE_DEVICE
   _BLUETOOTH_MODE = BluetoothMode.NONE
+  _HAS_MEDIA = False
+  _WITHOUT_BT_DEVICE = False
+  _HAS_CALL = False
+
+  _MEDIA_PLAYLIST_FILES = ('sine_tone_0.wav', 'sine_tone_1.wav')
+  _MEDIA_PLAYLIST_PATHS = (
+      '/sdcard/Download/sine_tone_0.wav',
+      '/sdcard/Download/sine_tone_1.wav',
+  )
 
   ad: android_device.AndroidDevice
+  ad_ref: android_device.AndroidDevice | None
+  ad_ter: android_device.AndroidDevice | None
   ads: list[android_device.AndroidDevice]
   bt_device: tws_device.TwsDevice
   bt_devices: list[tws_device.TwsDevice]
-  ad_address: str
-  ad_ref_address: str | None
-  ad_ter_address: str | None
-  file_tag: str
+  generate_audio_file_paths: list[str]
 
   def _setup_android_device(self, ad: android_device.AndroidDevice) -> None:
     """Sets up the Android device."""
-    # Skip the setup wizard if exists.
-    try:
-      ad.adb.shell('am start -a com.android.setupwizard.EXIT')
-    except android_device.adb.AdbError:
-      ad.log.exception('Fail to exit the setup wizard, skipping...')
-
-    # Enable Bluetooth HCI snoop log.
-    try:
-      ad.adb.shell('setprop persist.bluetooth.btsnooplogmode full')
-      ad.adb.shell('setprop persist.bluetooth.btsnoopsize 0xfffffffffffffff')
-    except android_device.adb.AdbError:
-      ad.log.exception(
-          'Fail to enable Bluetooth HCI snoop log, skipping...'
-      )
-
-    # Update LE audio connection policy.
-    enable_le_audio = (
-        'true' if self._BLUETOOTH_MODE == BluetoothMode.LEA else 'false'
+    android_setup_utils.skip_setup_wizard(ad)
+    android_setup_utils.enable_bluetooth_hci_snoop_log(ad)
+    android_setup_utils.update_le_audio_connection_policy(
+        ad, is_lea_enabled=self._BLUETOOTH_MODE == BluetoothMode.LEA
     )
-    try:
-      ad.adb.shell(
-          'setprop persist.bluetooth.leaudio.bypass_allow_list'
-          f' {enable_le_audio}'
-      )
-    except android_device.adb.AdbError:
-      ad.log.exception('Fail to update LE audio connection policy, skipping...')
+    android_setup_utils.install_and_load_bluetooth_snippet(
+        ad,
+        "/android_beat/snippet/bluetooth_snippet.apk"
+    )
+    call_utils.get_phone_number_if_need_call(ad, self._HAS_CALL)
 
-    # Reboot the device to ensure the device is in the clean state.
-    ad.reboot()
-
-    # Install and load Bluetooth snippet apk.
-    apk_path = "android_beat/snippet/bluetooth_snippets.apk"
-    apk_utils.install(ad, apk_path)
-    ad.load_snippet('bt_snippet', _BLUETOOTH_SNIPPETS_PACKAGE)
-
-    # Clear saved devices before test starts
     bluetooth_utils.clear_saved_devices(ad)
-
-    # Disable and enable Bluetooth to ensure it is in the clean state.
-    ad.adb.shell('svc bluetooth disable')
-    time.sleep(_DELAY_BETWEEN_BLUETOOTH_STATE_CHANGE.total_seconds())
-    ad.adb.shell('svc bluetooth enable')
-    time.sleep(_DELAY_BETWEEN_BLUETOOTH_STATE_CHANGE.total_seconds())
+    bluetooth_utils.reset_android_bluetooth_state(ad)
+    bluetooth_utils.get_devices_bluetooth_address(ad)
 
   def setup_class(self) -> None:
+    # if abort class, please check the Bluetooth mode is set explicitly.
     asserts.abort_class_if(
         self._BLUETOOTH_MODE == BluetoothMode.NONE,
         'Please set the Bluetooth mode explicitly.',
     )
 
-    self.file_tag = 'files' if 'files' in self.user_params else 'mh_files'
-
+    # Initialize and register Android devices.
     self.ads = self.register_controller(
         android_device, min_number=self._ANDROID_DEVICE_AMOUNT
     )
@@ -146,24 +120,41 @@ class BaseTestClass(base_test.BaseTestClass):
         [[ad] for ad in self.ads],
         raise_on_exception=True,
     )
-
-    self.ad_address = self.ads[0].bt_snippet.btGetAddress()
-    self.ad_ref_address, self.ad_ter_address = None, None
-
-    self.ad = self.ads[0]
-
-    self.bt_devices = self.register_controller(bluetooth_reference_device)
-    mobly_utils.concurrent_exec(
-        lambda d: d.factory_reset(),
-        ([bt_device] for bt_device in self.bt_devices),
-        raise_on_exception=True,
+    self.ad, self.ad_ref, self.ad_ter = android_setup_utils.get_android_devices(
+        self.ads, self._ANDROID_DEVICE_AMOUNT
     )
-    mobly_utils.concurrent_exec(
-        lambda d: d.set_component_number(2),
-        ([bt_device] for bt_device in self.bt_devices),
-        raise_on_exception=True,
+
+    # Initialize and register Bluetooth devices.
+    if self._WITHOUT_BT_DEVICE:
+      self.bt_devices = []
+    else:
+      self.bt_devices = self.register_controller(bluetooth_reference_device)
+      self.bt_device = bluetooth_utils.reset_bluetooth_devices(self.bt_devices)
+      bluetooth_utils.pair_and_assert_bluetooth_state(
+          self.ad, [self.bt_device], self._BLUETOOTH_MODE == BluetoothMode.LEA
+      )
+
+    self.generate_audio_file_paths = (
+        audio_utils.generate_and_push_audio_files_to_device(
+            self.ad,
+            self._MEDIA_PLAYLIST_FILES,
+            self.current_test_info.output_path,
+            has_media=self._HAS_MEDIA,
+        )
     )
-    self.bt_device = self.bt_devices[0]
+
+  def setup_test(self) -> None:
+    if self._WITHOUT_BT_DEVICE:
+      return
+
+    android_setup_utils.check_connection_and_reconnect(
+        self.ad,
+        self.bt_device,
+        self._BLUETOOTH_MODE == BluetoothMode.LEA,
+    )
+    android_setup_utils.stop_media_on_android_device_if_has_media(
+        self.ad, self._HAS_MEDIA
+    )
 
   def teardown_test(self) -> None:
     mobly_utils.concurrent_exec(
@@ -176,6 +167,18 @@ class BaseTestClass(base_test.BaseTestClass):
         [[bt_device] for bt_device in self.bt_devices],
         raise_on_exception=True,
     )
+    mobly_utils.concurrent_exec(
+        call_utils.end_call_and_check_idle,
+        [
+            [self.ad, self._HAS_CALL],
+            [self.ad_ref, self._HAS_CALL],
+            [self.ad_ter, self._HAS_CALL],
+        ],
+        raise_on_exception=True,
+    )
+    android_setup_utils.stop_media_on_android_device_if_has_media(
+        self.ad, self._HAS_MEDIA
+    )
 
   def on_fail(self, record: records.TestResultRecord) -> None:
     android_device.take_bug_reports(
@@ -183,7 +186,12 @@ class BaseTestClass(base_test.BaseTestClass):
     )
 
   def teardown_class(self):
-    bluetooth_utils.clear_saved_devices(self.ad)
+    if self._WITHOUT_BT_DEVICE:
+      bluetooth_utils.clear_saved_devices(self.ad, self.ad_ref.bt_address)
+    else:
+      bluetooth_utils.clear_saved_devices(
+          self.ad, [self.bt_device.bluetooth_address_primary]
+      )
     mobly_utils.concurrent_exec(
         lambda d: d.factory_reset(),
         ([bt_device] for bt_device in self.bt_devices),

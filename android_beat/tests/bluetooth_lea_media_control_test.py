@@ -16,15 +16,16 @@
 
 import datetime
 import os
+import sys
 import time
 
-from mobly import asserts
 from mobly import test_runner
 
 from android_beat.tests import base_test
 from android_beat.utils import audio_utils
 from android_beat.utils import bluetooth_utils
 from android_beat.utils import media_utils
+from android_beat.utils import recording_utils
 from android_beat.utils import test_utils
 
 
@@ -35,6 +36,10 @@ _STATE_SETTLE_TIME = datetime.timedelta(seconds=3)
 _MEDIA_PLAY_TIME_WITH_RECORDING = datetime.timedelta(seconds=10)
 _MEDIA_KEY_DEBOUNCE_TIME = datetime.timedelta(seconds=0.1)
 _MEDIA_ACTION_WAIT_TIME = datetime.timedelta(seconds=1)
+_ANDROID_VOLUME_LEVEL = 5
+_BT_VOLUME_LEVEL = 51
+_RECORDING_DURATION = datetime.timedelta(seconds=10)
+_RECORDING_STATE_TIMEOUT = datetime.timedelta(seconds=30)
 
 
 class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
@@ -42,60 +47,21 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
 
   _ANDROID_DEVICE_AMOUNT = base_test.AndroidDeviceAmount.SINGLE_DEVICE
   _BLUETOOTH_MODE = base_test.BluetoothMode.LEA
-
-  _MEDIA_FILES_BASENAMES = ['sine_tone_0.wav', 'sine_tone_1.wav']
-  _MEDIA_FILES_PATHS = [
-      '/sdcard/Download/sine_tone_0.wav',
-      '/sdcard/Download/sine_tone_1.wav',
-  ]
-
-  def _pair_bluetooth_lea_device(self) -> None:
-    """Pairs the Android device with the Bluetooth LE Audio device."""
-    bluetooth_utils.pair_bluetooth_device(self.ad, self.bt_device)
-    bluetooth_utils.wait_and_assert_lea_state(
-        self.ad, self.bt_device.bluetooth_address_primary, expect_active=True
-    )
-    audio_utils.wait_and_assert_audio_device_type(
-        self.ad,
-        audio_utils.AudioDeviceType.TYPE_BLE_HEADSET,
-        expect_active=True,
-    )
-
-  def setup_class(self) -> None:
-    super().setup_class()
-    asserts.abort_class_if(
-        not self.ad.bt_snippet.btIsLeAudioSupported(),
-        f'{self.ad} LE Audio is not supported',
-    )
-
-    self._pair_bluetooth_lea_device()
-
-    audio_utils.generate_and_push_audio_files(
-        self.ad,
-        self._MEDIA_FILES_BASENAMES,
-        self.current_test_info.output_path,
-    )
-    self.generate_audio_file_paths = [
-        os.path.join(self.current_test_info.output_path, file_name)
-        for file_name in self._MEDIA_FILES_BASENAMES
-    ]
-    self.ad.bt_snippet.media3Stop()
+  _HAS_MEDIA = True
 
   def setup_test(self) -> None:
-    # Check if LEA is still connected. If not, factory reset the Bluetooth
-    # device and repair it.
-    if not self.ad.bt_snippet.btIsLeAudioConnected(
-        self.bt_device.bluetooth_address_primary
-    ):
-      bluetooth_utils.clear_saved_devices(self.ad)
-      self.bt_device.factory_reset()
-      self._pair_bluetooth_lea_device()
+    super().setup_test()
+    audio_utils.wait_and_assert_recording_has_ble_headset(self.ad)
+    self.ad.log.info('BLE headset is ready for recording.')
 
-  def teardown_test(self) -> None:
-    self.ad.bt_snippet.media3Stop()
-    self.ad.bt_snippet.media3ClearPlaylist()
+  def teardown_test(self):
+    if self.ad.bt_snippet.mediaIsRecording():
+      self.ad.bt_snippet.mediaStopRecording()
+    # Clean up the file.
+    self.ad.adb.shell(['rm', '-f', recording_utils.RECORDING_FILE_PATH])
+    super().teardown_test()
 
-  def test_media_control_play_pause(self):
+  def test_46_1_and_46_2_media_control_play_pause(self):
     """Test for Bluetooth LE Audio media control from CT test.
 
     Precondition:
@@ -117,7 +83,7 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
       2. Media is paused on Android device.
       3. Media is playing on Android device and streaming on BT device.
     """
-    self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_FILES_PATHS[0])
+    self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
     test_utils.wait_until_or_assert(
         condition=self.ad.bt_snippet.media3IsPlayerPlaying,
         error_msg='Failed to play media on Android device',
@@ -151,7 +117,7 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
         error_msg='Failed to play media on LE Audio',
         timeout=_MEDIA_DEVICE_TYPE_TIMEOUT,
     )
-  def test_media_control_prev_next(self):
+  def test_46_3_media_control_prev_next(self):
     """Test for Bluetooth LE Audio media control from CT test.
 
     Precondition:
@@ -175,8 +141,8 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
       1. Media is playing on Android device and streaming on BT device with
       correct track index.
     """
-    self.ad.log.info('Setting playlist with: ', self._MEDIA_FILES_PATHS)
-    for file_path in self._MEDIA_FILES_PATHS:
+    self.ad.log.info('Setting playlist with: ', self._MEDIA_PLAYLIST_PATHS)
+    for file_path in self._MEDIA_PLAYLIST_PATHS:
       self.ad.log.info(f'Adding {file_path} to playlist')
       self.ad.bt_snippet.media3AddToPlaylist(file_path)
 
@@ -334,7 +300,7 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
     )
     self.ad.log.info('Track index is remains 0.')
 
-  def test_lea_volume_control_from_android_device(self):
+  def test_47_3_lea_volume_control_from_android_device(self):
     """Test for LEA volume control from Android device.
 
     Precondition:
@@ -355,7 +321,7 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
     Expected Results:
       1. Volume is adjusted correctly on Android device.
     """
-    self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_FILES_PATHS[0])
+    self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
     test_utils.wait_until_or_assert(
         condition=self.ad.bt_snippet.media3IsPlayerPlaying,
         error_msg='Failed to play media on Android device',
@@ -390,7 +356,7 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
     )
     self.ad.log.info('Volume is now 50%.')
 
-  def test_lea_volume_control_from_bt_device(self):
+  def test_47_1_lea_volume_control_from_bt_device(self):
     """Test for LEA volume control from Bluetooth device.
 
     Precondition:
@@ -401,7 +367,7 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
     Test Steps:
       1. Start local file playback on Android device.
       2. Verify media is playing on Android device and streaming on BT device.
-      3. Set volume to 5 on Android device.
+      3. Set volume to 5 on BT device.
       4. Verify volume is set to 5 on Android device.
       5. Volume up from BT device.
       6. Verify volume is set to 6 on Android device.
@@ -411,14 +377,16 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
     Expected Results:
       1. Volume is adjusted correctly on Android device.
     """
-    self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_FILES_PATHS[0])
+    self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
     test_utils.wait_until_or_assert(
         condition=self.ad.bt_snippet.media3IsPlayerPlaying,
         error_msg='Failed to play media on Android device',
         timeout=_MEDIA_PLAY_TIME,
     )
-    volume_level = 5
-    self.ad.bt_snippet.setMusicVolume(volume_level)
+
+    volume_level = _ANDROID_VOLUME_LEVEL
+    # self.ad.bt_snippet.setMusicVolume(volume_level)
+    self.bt_device.set_volume(_BT_VOLUME_LEVEL)
     test_utils.wait_until_or_assert(
         condition=lambda: self.ad.bt_snippet.getMusicVolume() == volume_level,
         error_msg=f'Failed to set volume to {volume_level}',
@@ -453,7 +421,7 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
         'Volume is now down to %s', self.ad.bt_snippet.getMusicVolume()
     )
 
-  def test_lea_volume_control_to_min_max_from_bt_device(self):
+  def test_47_2_lea_volume_control_to_min_max_from_bt_device(self):
     """Test for LEA volume control to min/max from Bluetooth device.
 
     Precondition:
@@ -474,7 +442,7 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
       1. Volume is adjusted to max and min correctly on Android device.
     """
     try:
-      self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_FILES_PATHS[0])
+      self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
       test_utils.wait_until_or_assert(
           condition=self.ad.bt_snippet.media3IsPlayerPlaying,
           error_msg='Failed to play media on Android device',
@@ -507,6 +475,96 @@ class BluetoothLeaMediaControlTest(base_test.BaseTestClass):
       self.ad.bt_snippet.setMusicVolume(
           self.ad.bt_snippet.getMusicMaxVolume() // 2
       )
+
+  def test_50_1_and_50_2_start_stop_recording(self):
+    """Tests starting and stopping media recording.
+
+    Objective:
+    To make sure the bluetooth device can start and stop recording correctly.
+
+    Precondition:
+    - DUT is paired with the primary BT device.
+    - DUT is in LE Audio media mode.
+    - DUT has a media file to play.
+    - DUT has a BLE headset connected.
+
+    Procedure:
+    1. Start recording.
+    2. Wait for the recording to finish.
+    3. Stop recording.
+
+    Verification:
+    1. The recording file is saved to the expected path.
+    2. The recording file is pulled to the host machine.
+    """
+    self.ad.log.info(
+        'Starting recording, saving to %s', recording_utils.RECORDING_FILE_NAME
+    )
+    with recording_utils.record_audio_context(self.ad):
+      time.sleep(_RECORDING_DURATION.total_seconds())  # Record for 10 seconds
+      test_utils.wait_until_or_assert(
+          condition=self.ad.bt_snippet.mediaIsRecording,
+          error_msg='Media is not recording',
+          timeout=_RECORDING_STATE_TIMEOUT,
+      )
+      test_utils.wait_until_or_assert(
+          condition=lambda: self.ad.bt_snippet.mediaGetRecordingBleDeviceInfo()
+          == self.bt_device.bluetooth_address_primary,
+          error_msg='Recording device is not the primary BT device',
+          timeout=_RECORDING_STATE_TIMEOUT,
+      )
+      self.ad.log.info(
+          'Recording device info: %s',
+          self.ad.bt_snippet.mediaGetRecordingBleDeviceInfo(),
+      )
+    pull_path = os.path.join(
+        self.current_test_info.output_path, recording_utils.RECORDING_FILE_NAME
+    )
+    self.ad.adb.pull([recording_utils.RECORDING_FILE_PATH, pull_path])
+
+  def _start_audio_recording(self) -> None:
+    """Starts audio recording if the platform is Linux."""
+    if sys.platform == 'linux':
+      self.bt_device.start_audio_recording()
+
+  def _stop_audio_recording(self) -> None:
+    """Stops audio recording if the platform is Linux."""
+    if sys.platform == 'linux':
+      self.bt_device.stop_audio_recording(self.current_test_info.output_path)
+
+  def test_45_1_streaming(self):
+    """Validate LE Audio media streaming functionality.
+
+    Objective:
+      To validate the Device Under Test (DUT) can successfully play media and
+      route to the connected Bluetooth device via LE Audio.
+
+    Test Preconditions:
+      1. Device: 1 Android device and 1 Bluetooth reference device.
+
+    Test Steps:
+      1. Play local media on DUT and routes to the connected device.
+      2. Verify the media routes to BT device continuously for 1 minute.
+      3. Stop the media on DUT.
+
+    Pass criteria:
+      1. DUT can play media and routes to the connected device without breaks.
+    """
+    try:
+      self._start_audio_recording()
+      self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
+      test_utils.wait_until_or_assert(
+          lambda: bluetooth_utils.is_le_audio_streaming_active(
+              self.ad, self.bt_device.bluetooth_address_primary
+          ),
+          error_msg=f'{self.ad} Timed out waiting for LE Audio media streaming',
+          timeout=_MEDIA_PLAY_TIME,
+      )
+    finally:
+      self.ad.bt_snippet.media3Stop()
+      assert self.current_test_info is not None
+      self._stop_audio_recording()
+
 
 if __name__ == '__main__':
   test_runner.main()

@@ -32,6 +32,7 @@ class BluetoothClassicConnectionTest(base_test.BaseTestClass):
 
   _BLUETOOTH_MODE = base_test.BluetoothMode.CLASSIC
   _ANDROID_DEVICE_AMOUNT = base_test.AndroidDeviceAmount.SINGLE_DEVICE
+  _HAS_MEDIA = False
 
   def setup_test(self) -> None:
     """Sets up the test."""
@@ -43,7 +44,7 @@ class BluetoothClassicConnectionTest(base_test.BaseTestClass):
     super().teardown_test()
     bluetooth_utils.clear_saved_devices(self.ad)
 
-  def test_discovery(self):
+  def test_4_1_discovery(self):
     """Tests Bluetooth discovery.
 
     Objective:
@@ -74,7 +75,7 @@ class BluetoothClassicConnectionTest(base_test.BaseTestClass):
         timeout=_BLUETOOTH_DISCOVERY_TIMEOUT,
     )
 
-  def test_pairing(self):
+  def test_4_12_pairing(self):
     """Tests Bluetooth pairing.
 
     Objective:
