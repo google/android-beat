@@ -15,7 +15,6 @@
 """Bluetooth A2DP test."""
 
 import datetime
-import os
 import time
 
 from mobly import asserts
@@ -34,54 +33,7 @@ class BluetoothA2dpTest(base_test.BaseTestClass):
 
   _BLUETOOTH_MODE = base_test.BluetoothMode.CLASSIC
   _ANDROID_DEVICE_AMOUNT = base_test.AndroidDeviceAmount.SINGLE_DEVICE
-  _MEDIA_FILES_NAMES = ('sine_tone_0.wav',)
-  _MEDIA_FILES_PATHS = (
-      '/sdcard/Download/sine_tone_0.wav',
-  )
-
-  def _pair_bluetooth_device(self) -> None:
-    """Pairs the Android device with the Bluetooth device."""
-    bluetooth_utils.pair_bluetooth_device(self.ad, self.bt_device)
-    bluetooth_utils.wait_and_assert_a2dp_state(
-        self.ad, self.bt_device.bluetooth_address_primary, expect_active=True
-    )
-    audio_utils.wait_and_assert_audio_device_type(
-        self.ad,
-        audio_utils.AudioDeviceType.TYPE_BLUETOOTH_A2DP,
-        expect_active=True,
-    )
-
-  def setup_class(self) -> None:
-    super().setup_class()
-    # Mute the notification sound.
-    self.ad.adb.shell('cmd media_session volume --stream 5 --set 0')
-    self._pair_bluetooth_device()
-
-    audio_utils.generate_and_push_audio_files(
-        self.ad,
-        self._MEDIA_FILES_NAMES,
-        self.current_test_info.output_path,
-    )
-    self.generate_audio_file_paths = [
-        os.path.join(self.current_test_info.output_path, file_name)
-        for file_name in self._MEDIA_FILES_NAMES
-    ]
-
-  def setup_test(self) -> None:
-    super().setup_test()
-    # Check if A2DP is still connected. If not, factory reset the Bluetooth
-    # device and repair it.
-    if not self.ad.bt_snippet.btIsA2dpConnected(
-        self.bt_device.bluetooth_address_primary
-    ):
-      bluetooth_utils.clear_saved_devices(self.ad)
-      self.bt_device.factory_reset()
-      self._pair_bluetooth_device()
-    self.ad.bt_snippet.media3Stop()
-
-  def teardown_test(self) -> None:
-    self.ad.bt_snippet.media3Stop()
-    super().teardown_test()
+  _HAS_MEDIA = True
 
   def test_a2dp_stream(self):
     """A2DP stream.
@@ -108,7 +60,7 @@ class BluetoothA2dpTest(base_test.BaseTestClass):
     """
     with audio_utils.assert_a2dp_playback_stopped(self.ad, self.bt_device):
       # Play sine_tone audio.
-      self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_FILES_PATHS[0])
+      self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
       audio_utils.start_audio_recording(self.bt_device)
 
       bluetooth_utils.wait_and_assert_a2dp_playback_state(
@@ -185,7 +137,7 @@ class BluetoothA2dpTest(base_test.BaseTestClass):
 
     with audio_utils.assert_a2dp_playback_stopped(self.ad, self.bt_device):
       # Play sine_tone audio.
-      self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_FILES_PATHS[0])
+      self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
 
       # Turn on the BT device.
       self.bt_device.open_box()
@@ -278,7 +230,7 @@ class BluetoothA2dpTest(base_test.BaseTestClass):
 
     with audio_utils.assert_a2dp_playback_stopped(self.ad, self.bt_device):
       # Play sine_tone audio.
-      self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_FILES_PATHS[0])
+      self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
 
       # Reconnect A2DP and HFP profiles with the BT device from DUT.
       self.ad.bt_snippet.btA2dpConnect(self.bt_device.bluetooth_address_primary)
@@ -336,7 +288,7 @@ class BluetoothA2dpTest(base_test.BaseTestClass):
     """
     with audio_utils.assert_a2dp_playback_stopped(self.ad, self.bt_device):
       # Play sine_tone audio.
-      self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_FILES_PATHS[0])
+      self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
 
       # Start audio recording on the BT device.
       audio_utils.start_audio_recording(self.bt_device)

@@ -62,6 +62,9 @@ class AudioDeviceType(enum.IntEnum):
       playback are the same.
   """
 
+  TYPE_UNKNOWN = 0
+  TYPE_BUILTIN_EARPIECE = 1
+  TYPE_BUILTIN_SPEAKER = 2
   TYPE_BLUETOOTH_SCO = 7
   TYPE_BLUETOOTH_A2DP = 8
   TYPE_BLE_HEADSET = 26
@@ -100,6 +103,23 @@ def wait_and_assert_audio_device_type(
       error_msg=(
           f'{ad} Timed out waiting for {expect_audio_device_type.name} to reach'
           f' the {"active" if expect_active else "inactive"} state'
+      ),
+      timeout=timeout,
+  )
+
+
+def wait_and_assert_audio_device_type_active(
+    ad: android_device.AndroidDevice,
+    expect_audio_device_type: AudioDeviceType,
+    timeout: datetime.timedelta = _AUDIO_CONNECTION_TIMEOUT,
+) -> None:
+  """Waits for and asserts audio device type supported on Android device."""
+  test_utils.wait_until_or_assert(
+      condition=lambda: expect_audio_device_type
+      == ad.bt_snippet.media3GetCommunicationDevice(),
+      error_msg=(
+          f'{ad} Timed out waiting for {expect_audio_device_type.name} to'
+          ' become active'
       ),
       timeout=timeout,
   )
@@ -515,3 +535,25 @@ def wait_and_assert_recording_has_ble_headset(
       error_msg='Failed to detect BLE headset.',
       timeout=_RECORDING_STATE_TIMEOUT,
   )
+
+
+def generate_and_push_audio_files_to_device(
+    ad: android_device.AndroidDevice,
+    playlist_files: Sequence[str],
+    local_source_audio_path: str,
+    media_length: datetime.timedelta = _MEDIA_MUSIC_LENGTH,
+    has_media: bool = True,
+) -> list[str]:
+  """Generates audio files and pushes to the device."""
+  if not has_media:
+    return []
+  generate_and_push_audio_files(
+      ad,
+      playlist_files,
+      local_source_audio_path,
+      media_length,
+  )
+  return [
+      os.path.join(local_source_audio_path, file_name)
+      for file_name in playlist_files
+  ]

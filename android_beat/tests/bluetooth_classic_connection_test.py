@@ -32,6 +32,7 @@ class BluetoothClassicConnectionTest(base_test.BaseTestClass):
 
   _BLUETOOTH_MODE = base_test.BluetoothMode.CLASSIC
   _ANDROID_DEVICE_AMOUNT = base_test.AndroidDeviceAmount.SINGLE_DEVICE
+  _HAS_MEDIA = False
 
   def setup_test(self) -> None:
     """Sets up the test."""

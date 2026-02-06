@@ -16,12 +16,10 @@
 
 import contextlib
 import datetime
-import os
 import time
 
 from mobly import test_runner
 from mobly import records
-from mobly.controllers import android_device
 
 from android_beat.tests import base_test
 from android_beat.utils import audio_utils
@@ -42,35 +40,8 @@ class BluetoothA2dpWithCallTest(base_test.BaseTestClass):
 
   _BLUETOOTH_MODE = base_test.BluetoothMode.CLASSIC
   _ANDROID_DEVICE_AMOUNT = base_test.AndroidDeviceAmount.TWO_DEVICES
-  _MEDIA_FILES_NAMES = ('sine_tone_0.wav',)
-  _MEDIA_FILES_PATHS = ('/sdcard/Download/sine_tone_0.wav',)
-  ad_ref: android_device.AndroidDevice
-  generate_audio_file_path: str
-
-  def _pair_bluetooth_device(self) -> None:
-    """Pairs the Android device with the Bluetooth device."""
-    bluetooth_utils.pair_bluetooth_device(self.ad, self.bt_device)
-    bluetooth_utils.wait_and_assert_hfp_state(
-        self.ad, self.bt_device.bluetooth_address_primary, expect_active=True
-    )
-    audio_utils.wait_and_assert_audio_device_type(
-        self.ad,
-        audio_utils.AudioDeviceType.TYPE_BLUETOOTH_SCO,
-        expect_active=True,
-    )
-
-  def setup_class(self) -> None:
-    super().setup_class()
-    self._pair_bluetooth_device()
-    self.ad_ref = self.ads[1]
-    audio_utils.generate_and_push_audio_files(
-        self.ad,
-        self._MEDIA_FILES_NAMES,
-        self.current_test_info.output_path,
-    )
-    self.generate_audio_file_path = os.path.join(
-        self.current_test_info.output_path, self._MEDIA_FILES_NAMES[0]
-    )
+  _HAS_MEDIA = True
+  _HAS_CALL = True
 
   @contextlib.contextmanager
   def _media_playback_context(self, file_path: str):
@@ -109,8 +80,7 @@ class BluetoothA2dpWithCallTest(base_test.BaseTestClass):
   @contextlib.contextmanager
   def _phone_call_context(self):
     """Context manager for handling a phone call between two Android devices."""
-    ad_ref_number = call_utils.get_phone_number(self.ad_ref)
-    call_utils.place_call(self.ad, ad_ref_number)
+    call_utils.place_call(self.ad, self.ad_ref.phone_number)  # pytype: disable=attribute-error
     try:
       test_utils.wait_until_or_assert(
           condition=lambda: call_utils.get_call_state(self.ad_ref)
@@ -169,14 +139,17 @@ class BluetoothA2dpWithCallTest(base_test.BaseTestClass):
       1. DUT can reconnect back to BT HS after BT HS is turned on.
       2. BT HS receive phone audio with HFP profile successfully.
     """
+    if self.ad_ref is None:
+      raise ValueError('Android reference device is not provided.')
+
     # Set the media volume to maximum.
     # This is for achieving optimal sound clarity in audio recordings.
     max_music_volume = self.ad.bt_snippet.getMusicMaxVolume()
     self.ad.bt_snippet.setMusicVolume(max_music_volume)
 
-    with self._media_playback_context(self._MEDIA_FILES_PATHS[0]):
+    with self._media_playback_context(self._MEDIA_PLAYLIST_PATHS[0]):
       # Step 1 & 2: Start audio recording & Verify DUT plays local music to BT.
-      with self._bt_audio_recording_context(self.generate_audio_file_path):
+      with self._bt_audio_recording_context(self.generate_audio_file_paths[0]):
         # Verify the media is playing on the BT device.
         bluetooth_utils.wait_and_assert_a2dp_playback_state(
             self.ad,
@@ -194,7 +167,7 @@ class BluetoothA2dpWithCallTest(base_test.BaseTestClass):
 
       # Step 5 & 6: After call end, start recording again and verify media
       # resumes.
-      with self._bt_audio_recording_context(self.generate_audio_file_path):
+      with self._bt_audio_recording_context(self.generate_audio_file_paths[0]):
         # Verify the media is playing on the BT device.
         bluetooth_utils.wait_and_assert_a2dp_playback_state(
             self.ad,
