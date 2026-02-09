@@ -21,11 +21,14 @@ import time
 from typing import Any
 
 from mobly import asserts
+from mobly import utils as mobly_utils
 from mobly.controllers import android_device
 import tenacity
 
 from android_beat.platforms.bluetooth import tws_device
+from android_beat.utils import audio_utils
 from android_beat.utils import test_utils
+
 
 _CSIP_CONNECTED_EVENT = 'Enter Connected\\({address}\\): STACK_EVENT'
 _CSIP_COORDINATOR_STATE_MACHINE_TAG = 'CsipSetCoordinatorStateMachine'
@@ -33,6 +36,8 @@ _CSIP_CONNECTION_LEVEL = 'I'
 
 # The unpairing process needs to wait more than 3 seconds to ensure completion.
 _DELAY_BETWEEN_BLUETOOTH_UNPAIR = datetime.timedelta(seconds=3)
+# Delay to ensure Bluetooth state changes (e.g., disable/enable) are complete.
+_DELAY_BETWEEN_BLUETOOTH_STATE_CHANGE = datetime.timedelta(seconds=3)
 
 _AUDIO_CONNECTION_TIMEOUT = datetime.timedelta(seconds=10)
 _BLUETOOTH_DISCOVERY_TIMEOUT = datetime.timedelta(seconds=120)
@@ -41,6 +46,47 @@ _BLUETOOTH_PROFILE_CONNECTION_TIMEOUT = datetime.timedelta(seconds=30)
 _CSIP_GROUP_SET_TIMEOUT = datetime.timedelta(seconds=120)
 
 
+def reset_android_bluetooth_state(ad: android_device.AndroidDevice) -> None:
+  """Resets Bluetooth to ensure it is in the clean state."""
+  ad.adb.shell('svc bluetooth disable')
+  time.sleep(_DELAY_BETWEEN_BLUETOOTH_STATE_CHANGE.total_seconds())
+  ad.adb.shell('svc bluetooth enable')
+  time.sleep(_DELAY_BETWEEN_BLUETOOTH_STATE_CHANGE.total_seconds())
+
+
+def get_devices_bluetooth_address(ad: android_device.AndroidDevice) -> None:
+  """Gets the Bluetooth address of all devices.
+
+  Args:
+    ad: The Android device that needs to get the Bluetooth address.
+  """
+  ad.bt_address = ad.bt_snippet.btGetAddress()
+
+
+def reset_bluetooth_devices(
+    bt_devices: list[tws_device.TwsDevice],
+) -> tws_device.TwsDevice:
+  """Resets Bluetooth devices to ensure they are in the clean state."""
+  mobly_utils.concurrent_exec(
+      lambda d: d.factory_reset(),
+      ([bt_device] for bt_device in bt_devices),
+      raise_on_exception=True,
+  )
+  mobly_utils.concurrent_exec(
+      lambda d: d.set_component_number(2),
+      ([bt_device] for bt_device in bt_devices),
+      raise_on_exception=True,
+  )
+  return bt_devices[0]
+
+
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(3),
+    wait=tenacity.wait_exponential(multiplier=1, max=10),
+    before_sleep=tenacity.before_sleep_log(
+        logging.getLogger(__name__), logging.INFO
+    ),
+)
 def clear_saved_devices(
     ad: android_device.AndroidDevice,
     bt_devices_addresses: Sequence[str] = (),
@@ -59,7 +105,7 @@ def clear_saved_devices(
   for device in ad.bt_snippet.btGetPairedDevices():
     if device['Address'] in bt_devices_addresses:
       ad.bt_snippet.btUnpairDevice(device['Address'])
-      time.sleep(_DELAY_BETWEEN_BLUETOOTH_UNPAIR.total_seconds())
+      time.sleep(_DELAY_BETWEEN_BLUETOOTH_UNPAIR.total_seconds() * 2)
   while devices := ad.bt_snippet.btGetPairedDevices():
     ad.bt_snippet.btUnpairDevice(devices[0]['Address'])
     time.sleep(_DELAY_BETWEEN_BLUETOOTH_UNPAIR.total_seconds())
@@ -351,3 +397,35 @@ def pair_bluetooth_device(
       error_msg=f'{ad} Timed out waiting for Bluetooth device to be paired',
       timeout=_BLUETOOTH_PAIRING_TIMEOUT,
   )
+
+
+def pair_and_assert_bluetooth_state(
+    ad: android_device.AndroidDevice,
+    bt_devices: list[tws_device.TwsDevice],
+    is_lea_enabled: bool = False,
+) -> None:
+  """Initiates and completes the Bluetooth pairing process for all devices."""
+  for bt_device in bt_devices:
+    pair_bluetooth_device(ad, bt_device)
+    if is_lea_enabled:
+      wait_and_assert_lea_state(
+          ad,
+          bt_device.bluetooth_address_primary,
+          expect_active=True,
+      )
+      audio_utils.wait_and_assert_audio_device_type(
+          ad,
+          audio_utils.AudioDeviceType.TYPE_BLE_HEADSET,
+          expect_active=True,
+      )
+    else:
+      wait_and_assert_a2dp_state(
+          ad,
+          bt_device.bluetooth_address_primary,
+          expect_active=True,
+      )
+      audio_utils.wait_and_assert_audio_device_type(
+          ad,
+          audio_utils.AudioDeviceType.TYPE_BLUETOOTH_A2DP,
+          expect_active=True,
+      )

@@ -14,11 +14,25 @@
 
 """Bluetooth call utils."""
 
+import datetime
 import enum
 import time
 
 from mobly import asserts
 from mobly.controllers import android_device
+
+from android_beat.utils import test_utils
+
+
+_CALL_STATE_TIMEOUT = datetime.timedelta(seconds=10)
+
+# Delay to ensure the call state is updated when call is answered or ended.
+# A short waiting period allows Android devices and Bluetooth devices to
+# properly release resources.
+BEFORE_ANSWER_CALL_DELAY = datetime.timedelta(seconds=4)
+AFTER_ANSWER_CALL_DELAY = datetime.timedelta(seconds=8)
+IN_CALL_PROCESS_DELAY = datetime.timedelta(seconds=3)
+END_CALL_DELAY = datetime.timedelta(seconds=3)
 
 
 @enum.unique
@@ -56,8 +70,13 @@ def end_call(ad: android_device.AndroidDevice) -> None:
   ad.adb.shell('input keyevent KEYCODE_ENDCALL')
 
 
-def get_phone_number(ad: android_device.AndroidDevice) -> str:
+def get_phone_number_if_need_call(
+    ad: android_device.AndroidDevice,
+    has_call: bool,
+) -> None:
   """Gets the phone number of ad."""
+  if not has_call:
+    return
   phone_number = ad.bt_snippet.getLine1Number()
   if not phone_number:
     ad.log.info(
@@ -68,4 +87,22 @@ def get_phone_number(ad: android_device.AndroidDevice) -> str:
         'phone_number', ad.dimensions, 'Phone number is not set in dimensions'
     )
     phone_number = ad.dimensions['phone_number']
-  return phone_number
+  ad.phone_number = phone_number
+
+
+def end_call_and_check_idle(
+    ad: android_device.AndroidDevice | None,
+    has_call: bool,
+    timeout: datetime.timedelta = _CALL_STATE_TIMEOUT,
+) -> None:
+  """Ends a call on ad and checks if the call state is idle."""
+  if ad is None or not has_call:
+    return
+  end_call(ad)
+  test_utils.wait_until_or_assert(
+      condition=lambda: get_call_state(ad) == CallState.CALL_STATE_IDLE,
+      error_msg='Failed to end the voice call',
+      timeout=timeout,
+  )
+  time.sleep(END_CALL_DELAY.total_seconds())
+
