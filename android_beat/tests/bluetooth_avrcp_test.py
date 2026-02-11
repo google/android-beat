@@ -15,14 +15,12 @@
 """Bluetooth AVRCP control test."""
 
 import datetime
-import os
 import time
 
 from mobly import test_runner
 
 from android_beat.tests import base_test
 from android_beat.utils import audio_utils
-from android_beat.utils import bluetooth_utils
 from android_beat.utils import media_utils
 from android_beat.utils import test_utils
 
@@ -32,67 +30,13 @@ _EVENT_WAIT_TIMEOUT = datetime.timedelta(seconds=15)
 _MEDIA_PLAY_TIME_WITH_RECORDING = datetime.timedelta(seconds=10)
 _MEDIA_ACTION_WAIT_TIME = datetime.timedelta(seconds=1)
 
-_PLAYLIST_FILES = ('sine_tone_0.wav', 'sine_tone_1.wav')
-_PLAYLIST_PATHS = (
-    '/sdcard/Download/sine_tone_0.wav',
-    '/sdcard/Download/sine_tone_1.wav',
-)
-
 
 class BluetoothAvrcpTest(base_test.BaseTestClass):
   """Test class for Bluetooth AVRCP control test."""
 
   _BLUETOOTH_MODE = base_test.BluetoothMode.CLASSIC
   _ANDROID_DEVICE_AMOUNT = base_test.AndroidDeviceAmount.SINGLE_DEVICE
-  _MEDIA_FILES_BASENAMES = ('sine_tone_0.wav', 'sine_tone_1.wav')
-  _MEDIA_FILES_PATHS = (
-      '/sdcard/Download/sine_tone_0.wav',
-      '/sdcard/Download/sine_tone_1.wav',
-  )
-
-  def _pair_bluetooth_device(self) -> None:
-    """Pairs the Android device with the Bluetooth device."""
-    bluetooth_utils.pair_bluetooth_device(self.ad, self.bt_device)
-    bluetooth_utils.wait_and_assert_hfp_state(
-        self.ad, self.bt_device.bluetooth_address_primary, expect_active=True
-    )
-    audio_utils.wait_and_assert_audio_device_type(
-        self.ad,
-        audio_utils.AudioDeviceType.TYPE_BLUETOOTH_SCO,
-        expect_active=True,
-    )
-
-  def setup_class(self) -> None:
-    super().setup_class()
-    self._pair_bluetooth_device()
-
-    audio_utils.generate_and_push_audio_files(
-        self.ad,
-        self._MEDIA_FILES_BASENAMES,
-        self.current_test_info.output_path,
-    )
-    self.generate_audio_file_paths = [
-        os.path.join(self.current_test_info.output_path, file_name)
-        for file_name in self._MEDIA_FILES_BASENAMES
-    ]
-
-  def setup_test(self) -> None:
-    super().setup_test()
-    # Check if HFP is still connected. If not, factory reset the Bluetooth
-    # device and repair it.
-    if not self.ad.bt_snippet.btIsHfpConnected(
-        self.bt_device.bluetooth_address_primary
-    ):
-      bluetooth_utils.clear_saved_devices(self.ad)
-      self.bt_device.factory_reset()
-      self._pair_bluetooth_device()
-    self.ad.bt_snippet.media3Stop()
-    self.ad.bt_snippet.media3ClearPlaylist()
-
-  def teardown_test(self) -> None:
-    self.ad.bt_snippet.media3Stop()
-    self.ad.bt_snippet.media3ClearPlaylist()
-    super().teardown_test()
+  _HAS_MEDIA = True
 
   def test_avrcp_play_pause_from_android(self):
     """Test for play/pause audio in AVRCP control from Android device.
@@ -121,7 +65,7 @@ class BluetoothAvrcpTest(base_test.BaseTestClass):
       Bluetooth reference device.
     """
     # Play sine_tone audio.
-    self.ad.bt_snippet.media3StartLocalFile(_PLAYLIST_PATHS[0])
+    self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
     self.ad.log.info('Start playing audio...')
     test_utils.wait_until_or_assert(
         condition=self.ad.bt_snippet.media3IsPlayerPlaying,
@@ -211,8 +155,8 @@ class BluetoothAvrcpTest(base_test.BaseTestClass):
       3. Verify the track index is correct.
       4. Verify the audio recording is correct when playing next/prev track.
     """
-    self.ad.log.info('Setting playlist with: %s', _PLAYLIST_PATHS)
-    for file_path in _PLAYLIST_PATHS:
+    self.ad.log.info('Setting playlist with: %s', self._MEDIA_PLAYLIST_PATHS)
+    for file_path in self._MEDIA_PLAYLIST_PATHS:
       self.ad.log.info('Adding %s to playlist', file_path)
       self.ad.bt_snippet.media3AddToPlaylist(file_path)
 
@@ -428,7 +372,7 @@ class BluetoothAvrcpTest(base_test.BaseTestClass):
       2. Verify the audio is streaming to Bluetooth
     """
     # Play sine_tone audio.
-    self.ad.bt_snippet.media3StartLocalFile(_PLAYLIST_PATHS[0])
+    self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
     test_utils.wait_until_or_assert(
         condition=self.ad.bt_snippet.media3IsPlayerPlaying,
         error_msg='Failed to start play media on Android device.',
@@ -516,8 +460,8 @@ class BluetoothAvrcpTest(base_test.BaseTestClass):
       2. Verify the initial track index is correct.
       3. Verify the audio recording is correct when playing next/prev track.
     """
-    self.ad.log.info('Setting playlist with: %s', _PLAYLIST_PATHS)
-    for file_path in _PLAYLIST_PATHS:
+    self.ad.log.info('Setting playlist with: %s', self._MEDIA_PLAYLIST_PATHS)
+    for file_path in self._MEDIA_PLAYLIST_PATHS:
       self.ad.log.info('Adding %s to playlist', file_path)
       self.ad.bt_snippet.media3AddToPlaylist(file_path)
 
@@ -742,7 +686,7 @@ class BluetoothAvrcpTest(base_test.BaseTestClass):
     2. Verify the volume is adjusted on Android device and Bluetooth
     reference device.
     """
-    self.ad.bt_snippet.media3StartLocalFile(_PLAYLIST_PATHS[0])
+    self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
     test_utils.wait_until_or_assert(
         condition=self.ad.bt_snippet.media3IsPlayerPlaying,
         error_msg='Failed to play media on Android device.',

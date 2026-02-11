@@ -34,6 +34,7 @@ class BluetoothLeaConnectionTest(base_test.BaseTestClass):
 
   _BLUETOOTH_MODE = base_test.BluetoothMode.LEA
   _ANDROID_DEVICE_AMOUNT = base_test.AndroidDeviceAmount.SINGLE_DEVICE
+  _HAS_MEDIA = False
 
   def setup_test(self) -> None:
     asserts.skip_if(

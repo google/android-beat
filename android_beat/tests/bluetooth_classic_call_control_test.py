@@ -15,11 +15,9 @@
 """Bluetooth Classic call control test."""
 
 import datetime
-import os
+import time
 
-from mobly import asserts
 from mobly import test_runner
-from mobly.controllers import android_device
 
 from android_beat.tests import base_test
 from android_beat.utils import audio_utils
@@ -28,15 +26,12 @@ from android_beat.utils import call_utils
 from android_beat.utils import media_utils
 from android_beat.utils import test_utils
 
-_BLUETOOTH_DISCOVERY_TIMEOUT = datetime.timedelta(seconds=120)
 _BLUETOOTH_PAIRING_TIMEOUT = datetime.timedelta(seconds=60)
 _MAKE_CALL_TIMEOUT = datetime.timedelta(seconds=60)
 _GET_CALL_STATE_TIMEOUT = datetime.timedelta(seconds=30)
 _END_CALL_TIMEOUT = datetime.timedelta(seconds=30)
 
 _DEFAULT_MUSIC_VOLUME = 80
-_MEDIA_FILES_NAMES = ("sine_tone_0.wav",)
-_MEDIA_FILES_PATHS = ("/sdcard/Download/sine_tone_0.wav",)
 
 
 class BluetoothClassicCallControlTest(base_test.BaseTestClass):
@@ -44,57 +39,8 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
 
   _BLUETOOTH_MODE = base_test.BluetoothMode.CLASSIC
   _ANDROID_DEVICE_AMOUNT = base_test.AndroidDeviceAmount.TWO_DEVICES
-  ad_ref: android_device.AndroidDevice
-
-  def _pair_bluetooth_device(self) -> None:
-    """Pairs the Android device with the Bluetooth device."""
-    bluetooth_utils.pair_bluetooth_device(self.ad, self.bt_device)
-    bluetooth_utils.wait_and_assert_hfp_state(
-        self.ad, self.bt_device.bluetooth_address_primary, expect_active=True
-    )
-    audio_utils.wait_and_assert_audio_device_type(
-        self.ad,
-        audio_utils.AudioDeviceType.TYPE_BLUETOOTH_SCO,
-        expect_active=True,
-    )
-
-  def setup_class(self) -> None:
-    super().setup_class()
-    self.ad_ref = self.ads[1]
-    self._pair_bluetooth_device()
-    audio_utils.generate_and_push_audio_files(
-        self.ad,
-        _MEDIA_FILES_NAMES,
-        self.current_test_info.output_path,
-    )
-    self.generate_audio_file_path = os.path.join(
-        self.current_test_info.output_path, _MEDIA_FILES_NAMES[0]
-    )
-    self.ad_ref.phone_number = call_utils.get_phone_number(self.ad_ref)
-    self.ad.phone_number = call_utils.get_phone_number(self.ad)
-
-  def setup_test(self) -> None:
-    super().setup_test()
-    if not self.ad.bt_snippet.btIsHfpConnected(
-        self.bt_device.bluetooth_address_primary
-    ):
-      self.bt_device.factory_reset()
-      bluetooth_utils.clear_saved_devices(self.ad)
-      self._pair_bluetooth_device()
-
-  def teardown_test(self) -> None:
-    super().teardown_test()
-    # End the call on both devices
-    call_utils.end_call(self.ad)
-    call_utils.end_call(self.ad_ref)
-    test_utils.wait_until_or_assert(
-        condition=lambda: call_utils.get_call_state(self.ad)
-        == call_utils.CallState.CALL_STATE_IDLE
-        and call_utils.get_call_state(self.ad_ref)
-        == call_utils.CallState.CALL_STATE_IDLE,
-        error_msg="Failed to end the voice call on both devices",
-        timeout=_END_CALL_TIMEOUT,
-    )
+  _HAS_MEDIA = True
+  _HAS_CALL = True
 
   def test_disconnect_turn_off_bt_device(self):
     """Tests Bluetooth disconnect - turn off BT device.
@@ -113,6 +59,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
     Pass Criteria:
       1. DUT should disconnect A2DP/HFP (Classic) connection.
     """
+    if self.ad_ref is None:
+      raise ValueError("Android reference device is not provided.")
+
     try:
       # Turn off the BT device
       self.bt_device.power_off()
@@ -173,6 +122,8 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       1. DUT can reconnect back to BT HS after BT HS is turned on.
       2. BT HS receive phone audio with HFP profile successfully.
     """
+    if self.ad_ref is None:
+      raise ValueError("Android reference device is not provided.")
 
     try:
       # Turn off the BT device
@@ -190,14 +141,15 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       )
 
       # Verify the BT device is still in paired status
-      asserts.assert_true(
-          bluetooth_utils.is_bt_device_in_saved_devices(
+      test_utils.wait_until_or_assert(
+          condition=lambda: bluetooth_utils.is_bt_device_in_saved_devices(
               self.ad, self.bt_device.bluetooth_address_primary
           ),
-          msg=(
+          error_msg=(
               "Failed to keep pair status with Bluetooth device after turning"
               " off Bluetooth device"
           ),
+          timeout=_BLUETOOTH_PAIRING_TIMEOUT,
       )
     finally:
       # Turn on the BT device
@@ -214,6 +166,8 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         expect_active=True,
     )
 
+    time.sleep(call_utils.IN_CALL_PROCESS_DELAY.total_seconds())
+
     # Make a call from DUT to Android Reference device
     call_utils.place_call(self.ad, self.ad_ref.phone_number)
     test_utils.wait_until_or_assert(
@@ -222,6 +176,10 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         error_msg="Failed to make an outgoing call to the reference device",
         timeout=_MAKE_CALL_TIMEOUT,
     )
+    time.sleep(
+        call_utils.BEFORE_ANSWER_CALL_DELAY.total_seconds()
+    )
+
     call_utils.answer_call(self.ad_ref)
     test_utils.wait_until_or_assert(
         condition=lambda: call_utils.get_call_state(self.ad)
@@ -230,6 +188,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         == call_utils.CallState.CALL_STATE_OFFHOOK,
         error_msg="Failed to establish a voice call between devices",
         timeout=_GET_CALL_STATE_TIMEOUT,
+    )
+    time.sleep(
+        call_utils.AFTER_ANSWER_CALL_DELAY.total_seconds()
     )
 
     # Verify the call audio routes to BT device.
@@ -263,6 +224,8 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       4. Call audio should be clear and audible on the both BT device end.
       3. Call should be correctly ended by Android device.
     """
+    if self.ad_ref is None:
+      raise ValueError("Android reference device is not provided.")
 
     # Make a call from Android Reference device to DUT.
     call_utils.place_call(self.ad_ref, self.ad.phone_number)
@@ -271,6 +234,10 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         == call_utils.CallState.CALL_STATE_RINGING,
         error_msg="Failed to make an outgoing call to the reference device",
         timeout=_MAKE_CALL_TIMEOUT,
+    )
+
+    time.sleep(
+        call_utils.BEFORE_ANSWER_CALL_DELAY.total_seconds()
     )
 
     # Answer the call from Android device.
@@ -282,6 +249,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         == call_utils.CallState.CALL_STATE_OFFHOOK,
         error_msg="Failed to answer the call from Android device",
         timeout=_GET_CALL_STATE_TIMEOUT,
+    )
+    time.sleep(
+        call_utils.AFTER_ANSWER_CALL_DELAY.total_seconds()
     )
 
     # Verify the call audio routes to BT device.
@@ -298,6 +268,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         == call_utils.CallState.CALL_STATE_IDLE,
         error_msg="Failed to end the call from Android device",
         timeout=_GET_CALL_STATE_TIMEOUT,
+    )
+    time.sleep(
+        call_utils.END_CALL_DELAY.total_seconds()
     )
 
   def test_answer_and_end_call_from_bt_device(self) -> None:
@@ -325,6 +298,8 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       2. Call should be answered by BT device and audio routs to BT device.
       3. Call should be correctly ended by BT device.
     """
+    if self.ad_ref is None:
+      raise ValueError("Android reference device is not provided.")
 
     # Make a call from Android Reference device to DUT.
     call_utils.place_call(self.ad_ref, self.ad.phone_number)
@@ -333,6 +308,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         == call_utils.CallState.CALL_STATE_RINGING,
         error_msg="Failed to make an outgoing call to the reference device",
         timeout=_MAKE_CALL_TIMEOUT,
+    )
+    time.sleep(
+        call_utils.BEFORE_ANSWER_CALL_DELAY.total_seconds()
     )
 
     # Answer the call from BT device.
@@ -350,6 +328,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
     media_utils.wait_for_expected_media_router_type(
         self.ad, media_utils.MediaRouterType.DEVICE_TYPE_BLUETOOTH
     )
+
+    # Wait for the call state to be stable.
+    time.sleep(call_utils.IN_CALL_PROCESS_DELAY.total_seconds())
 
     # End the call from BT device.
     self.bt_device.call_decline()
@@ -389,9 +370,14 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       3. Call audio should be clear audible both BT device end.
       3. Call should be correctly ended by Android device.
     """
+    if self.ad_ref is None:
+      raise ValueError("Android reference device is not provided.")
 
     # Make a call from Android Reference device to DUT.
     call_utils.place_call(self.ad_ref, self.ad.phone_number)
+    time.sleep(
+        call_utils.IN_CALL_PROCESS_DELAY.total_seconds()
+    )
 
     # Answer the call from BT device.
     test_utils.wait_until_or_assert(
@@ -401,6 +387,10 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         timeout=_MAKE_CALL_TIMEOUT,
     )
     self.bt_device.call_accept()
+    time.sleep(
+        call_utils.BEFORE_ANSWER_CALL_DELAY.total_seconds()
+    )
+
     test_utils.wait_until_or_assert(
         condition=lambda: call_utils.get_call_state(self.ad)
         == call_utils.CallState.CALL_STATE_OFFHOOK
@@ -449,6 +439,8 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       1. Call ring routes to BT device.
       2. Call should be correctly ended by BT device.
     """
+    if self.ad_ref is None:
+      raise ValueError("Android reference device is not provided.")
 
     # Make a call from Android Reference device to DUT.
     call_utils.place_call(self.ad_ref, self.ad.phone_number)
@@ -460,6 +452,11 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         error_msg="Failed to make an outgoing call to the reference device",
         timeout=_MAKE_CALL_TIMEOUT,
     )
+
+    # Wait for the call state to be stable.
+    time.sleep(call_utils.IN_CALL_PROCESS_DELAY.total_seconds())
+
+    # Reject the call from BT device.
     self.bt_device.call_decline()
 
     # Veiry the call state becomes idle on both Android device.
@@ -498,6 +495,8 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       2. Call audio should be hear clearly on both BT device end.
       2. Call should be ended by correctly by DUT.
     """
+    if self.ad_ref is None:
+      raise ValueError("Android reference device is not provided.")
 
     # Make a call from DUT to Android Reference device.
     call_utils.place_call(self.ad, self.ad_ref.phone_number)
@@ -508,6 +507,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         == call_utils.CallState.CALL_STATE_RINGING,
         error_msg="Failed to make an outgoing call to the reference device",
         timeout=_MAKE_CALL_TIMEOUT,
+    )
+    time.sleep(
+        call_utils.IN_CALL_PROCESS_DELAY.total_seconds()
     )
 
     # Answer the call from Android reference device.
@@ -524,6 +526,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
     # Verify the call audio routs to BT device
     media_utils.wait_for_expected_media_router_type(
         self.ad, media_utils.MediaRouterType.DEVICE_TYPE_BLUETOOTH
+    )
+    time.sleep(
+        call_utils.IN_CALL_PROCESS_DELAY.total_seconds()
     )
 
     # End the call from Android device.
@@ -565,6 +570,8 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       2. Call audio should be hear clearly on both BT device end.
       2. Call should be ended by correctly by DUT.
     """
+    if self.ad_ref is None:
+      raise ValueError("Android reference device is not provided.")
 
     # Make a call from DUT to Android Reference device.
     call_utils.place_call(self.ad, self.ad_ref.phone_number)
@@ -575,6 +582,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         == call_utils.CallState.CALL_STATE_RINGING,
         error_msg="Failed to make an outgoing call to the reference device",
         timeout=_MAKE_CALL_TIMEOUT,
+    )
+    time.sleep(
+        call_utils.IN_CALL_PROCESS_DELAY.total_seconds()
     )
 
     # Answer the call from Android reference device.
@@ -592,6 +602,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
     media_utils.wait_for_expected_media_router_type(
         self.ad, media_utils.MediaRouterType.DEVICE_TYPE_BLUETOOTH
     )
+
+    # Wait for the call state to be stable.
+    time.sleep(call_utils.IN_CALL_PROCESS_DELAY.total_seconds())
 
     # End the call from Android device.
     self.bt_device.call_decline()
@@ -636,6 +649,8 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       2. Call audio should be hear clearly on both BT device end.
       2. Call quality should not get affected.
     """
+    if self.ad_ref is None:
+      raise ValueError("Android reference device is not provided.")
 
     # Make a call from DUT to Android Reference device.
     call_utils.place_call(self.ad, self.ad_ref.phone_number)
@@ -647,6 +662,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         error_msg="Failed to make an outgoing call to the reference device",
         timeout=_MAKE_CALL_TIMEOUT,
     )
+    time.sleep(
+        call_utils.BEFORE_ANSWER_CALL_DELAY.total_seconds()
+    )
 
     # Answer the call from Android reference device.
     call_utils.answer_call(self.ad_ref)
@@ -657,6 +675,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         == call_utils.CallState.CALL_STATE_OFFHOOK,
         error_msg="Failed to establish a voice call between Android devices",
         timeout=_GET_CALL_STATE_TIMEOUT,
+    )
+    time.sleep(
+        call_utils.AFTER_ANSWER_CALL_DELAY.total_seconds()
     )
 
     # Verify the call audio routes to BT device
@@ -710,6 +731,8 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       1. Call gets routed to HF when AG gets connected.
       2. Call should be audible both way.
     """
+    if self.ad_ref is None:
+      raise ValueError("Android reference device is not provided.")
 
     try:
       # Turn off the BT device
@@ -727,14 +750,15 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       )
 
       # Verify the BT device is still in paired status
-      asserts.assert_true(
-          bluetooth_utils.is_bt_device_in_saved_devices(
+      test_utils.wait_until_or_assert(
+          condition=lambda: bluetooth_utils.is_bt_device_in_saved_devices(
               self.ad, self.bt_device.bluetooth_address_primary
           ),
-          msg=(
+          error_msg=(
               "Failed to keep pair status with Bluetooth device after turning"
               " offBT device"
           ),
+          timeout=_BLUETOOTH_PAIRING_TIMEOUT,
       )
 
       # Make a call from DUT to Android Reference device
@@ -745,6 +769,10 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
           error_msg="Failed to make an outgoing call to the reference device",
           timeout=_MAKE_CALL_TIMEOUT,
       )
+      time.sleep(
+          call_utils.BEFORE_ANSWER_CALL_DELAY.total_seconds()
+      )
+
       call_utils.answer_call(self.ad_ref)
       test_utils.wait_until_or_assert(
           condition=lambda: call_utils.get_call_state(self.ad)
@@ -753,6 +781,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
           == call_utils.CallState.CALL_STATE_OFFHOOK,
           error_msg="Failed to establish a voice call between devices",
           timeout=_GET_CALL_STATE_TIMEOUT,
+      )
+      time.sleep(
+          call_utils.AFTER_ANSWER_CALL_DELAY.total_seconds()
       )
     finally:
       # Turn on the BT device
@@ -807,6 +838,8 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       1. Call gets routed to BT device when it gets connected.
       2. Call should be audible both way.
     """
+    if self.ad_ref is None:
+      raise ValueError("Android reference device is not provided.")
 
     # Make a call from DUT to Android Reference device
     call_utils.place_call(self.ad, self.ad_ref.phone_number)
@@ -816,6 +849,10 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         error_msg="Failed to make an outgoing call to the reference device",
         timeout=_MAKE_CALL_TIMEOUT,
     )
+    time.sleep(
+        call_utils.BEFORE_ANSWER_CALL_DELAY.total_seconds()
+    )
+
     call_utils.answer_call(self.ad_ref)
     test_utils.wait_until_or_assert(
         condition=lambda: call_utils.get_call_state(self.ad)
@@ -824,6 +861,9 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         == call_utils.CallState.CALL_STATE_OFFHOOK,
         error_msg="Failed to establish a voice call between devices",
         timeout=_GET_CALL_STATE_TIMEOUT,
+    )
+    time.sleep(
+        call_utils.AFTER_ANSWER_CALL_DELAY.total_seconds()
     )
 
     # Verify the call audio routes to BT device.
@@ -864,8 +904,8 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       )
     finally:
       self.bt_device.power_on()
-  # Notes: this bug will cause BES board crash and affects others tests.
-  def _test_media_stream_call_turn_off_active_call_from_bt_device(self) -> None:
+
+  def test_media_stream_call_turn_off_active_call_from_bt_device(self) -> None:
     """Tests Bluetooth media stream - call - turn off active call.
 
     Objective:
@@ -875,7 +915,7 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
       3. Network: WiFi.
 
     Test Steps:
-      1. DUT pair and connect with LE Audio headset.
+      1. DUT pair and connect with HFP profile.
       2. DUT set volume level to 80% and stream media.
       3. Verify the media routes to BT device.
       4. DUT make a call to another Android device.
@@ -886,23 +926,21 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
 
     Pass Criteria:
       1. DUT pair and connect with HFP profile when disabled LE Audio.
-      2. DUT pair and connect with LE Audio headset when enabled LE Audio.
-      3. When DUT turn off BT, call should be routed to DUT.
-      4. When DUT turn on BT, call should be routed back to BT device.
-      5. Call audio volume should be the same level, which was set before
+      2. When DUT turn off BT, call should be routed to DUT.
+      3. When DUT turn on BT, call should be routed back to BT device.
+      4. Call audio volume should be the same level, which was set before
       disconnect, when re-renabing BT.
     """
+    if self.ad_ref is None:
+      raise ValueError("Android reference device is not provided.")
 
     # Play media on DUT
-    self.ad.bt_snippet.media3StartLocalFile(_MEDIA_FILES_PATHS[0])
+    self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
 
     # Verify the media is playing on the BT device.
     media_utils.wait_for_expected_media_router_type(
         self.ad, media_utils.MediaRouterType.DEVICE_TYPE_BLUETOOTH
     )
-
-    # DUT set call volume level to 80%.
-    self.ad.bt_snippet.setVoiceCallVolume(_DEFAULT_MUSIC_VOLUME)
 
     # Make a call from DUT to Android Reference device
     call_utils.place_call(self.ad, self.ad_ref.phone_number)
@@ -912,6 +950,10 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         error_msg="Failed to make an outgoing call to the reference device",
         timeout=_MAKE_CALL_TIMEOUT,
     )
+    time.sleep(
+        call_utils.BEFORE_ANSWER_CALL_DELAY.total_seconds()
+    )
+
     call_utils.answer_call(self.ad_ref)
     test_utils.wait_until_or_assert(
         condition=lambda: call_utils.get_call_state(self.ad)
@@ -921,6 +963,13 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
         error_msg="Failed to establish a voice call between devices",
         timeout=_GET_CALL_STATE_TIMEOUT,
     )
+    time.sleep(
+        call_utils.AFTER_ANSWER_CALL_DELAY.total_seconds()
+    )
+
+    # DUT set call volume level to 80%.
+    self.ad.bt_snippet.setVoiceCallVolume(_DEFAULT_MUSIC_VOLUME)
+    current_volume_level = self.ad.bt_snippet.getVoiceCallVolume()
 
     # Verify the call audio routes to BT device.
     media_utils.wait_for_expected_media_router_type(
@@ -928,24 +977,28 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
     )
 
     # Turn off the BT device on DUT.
-    self.ad.bt_snippet.btDisable()
-    # media stream to speaker.
-    # Verify the call audio routes to DUT.
-    media_utils.wait_for_expected_media_router_type(
-        self.ad, media_utils.MediaRouterType.DEVICE_TYPE_BLUETOOTH
+    self.ad.adb.shell("svc bluetooth disable")
+
+    bluetooth_utils.wait_and_assert_hfp_state(
+        self.ad, self.bt_device.bluetooth_address_primary, expect_active=False
+    )
+    audio_utils.wait_and_assert_audio_device_type_active(
+        self.ad,
+        audio_utils.AudioDeviceType.TYPE_BUILTIN_EARPIECE,
     )
 
     # Turn on the BT device on DUT.
-    self.ad.bt_snippet.btEnable()
-    # Verify the BT device is still in paired status
-    asserts.assert_true(
-        bluetooth_utils.is_bt_device_in_saved_devices(
+    self.ad.adb.shell("svc bluetooth enable")
+
+    test_utils.wait_until_or_assert(
+        condition=lambda: bluetooth_utils.is_bt_device_in_saved_devices(
             self.ad, self.bt_device.bluetooth_address_primary
         ),
-        msg=(
-            "Failed to keep pair status with Bluetooth device after turning off"
-            " Bluetooth device"
+        error_msg=(
+            "Failed to keep paired status with Bluetooth device after turning"
+            " offBT device"
         ),
+        timeout=_BLUETOOTH_PAIRING_TIMEOUT,
     )
 
     # Verify HEADSET profile is successfully linked and Android system
@@ -953,17 +1006,19 @@ class BluetoothClassicCallControlTest(base_test.BaseTestClass):
     bluetooth_utils.wait_and_assert_hfp_state(
         self.ad, self.bt_device.bluetooth_address_primary, expect_active=True
     )
-    audio_utils.wait_and_assert_audio_device_type(
+    audio_utils.wait_and_assert_audio_device_type_active(
         self.ad,
         audio_utils.AudioDeviceType.TYPE_BLUETOOTH_SCO,
-        expect_active=True,
     )
 
+    # Wait for the call volume level to be updated after reconnecting HFP.
+    time.sleep(call_utils.IN_CALL_PROCESS_DELAY.total_seconds() * 2)
     # Verify DUT's call volume level is same as 80%.
-    asserts.assert_equal(
-        self.ad.bt_snippet.getVoiceCallVolume(_DEFAULT_MUSIC_VOLUME),
-        _DEFAULT_MUSIC_VOLUME,
-        msg="Failed to set call volume level to {_DEFAULT_MUSIC_VOLUME}",
+    test_utils.wait_until_or_assert(
+        condition=lambda: self.ad.bt_snippet.getVoiceCallVolume()
+        == current_volume_level,
+        error_msg="Failed to update call volume level after reconnecting HFP",
+        timeout=_GET_CALL_STATE_TIMEOUT,
     )
 
 

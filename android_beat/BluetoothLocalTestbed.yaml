@@ -3,21 +3,15 @@ TestBeds:
   Controllers:
     AndroidDevice:
       - serial: 'localhost:5555'
-      dimensions:
-        model: 'pixel 9'
-        phone_number: '1234567890'
     AndroidDevice:
       - serial: 'localhost:5556'
-      dimensions:
-        model: 'pixel 9'
-        phone_number: '1234567891'
     BluetoothReferenceDevice:
       - controller_name: 'TwsDevice'
         controller_type: 'BesDevice'
         primary_ear: 'RIGHT'
         left_config:
           remote_mode: false
-          serial_port: 'COM8'
+          serial_port: '/dev/ttyUSB0'
           bluetooth_address: '11:11:22:33:33:50'
           audio_configs:
             pcm_name: 'hw:0,0'
@@ -26,7 +20,7 @@ TestBeds:
             channels: 2
         right_config:
           remote_mode: false
-          serial_port: 'COM3'
+          serial_port: '/dev/ttyUSB1'
           bluetooth_address: '11:11:22:33:33:51'
           audio_configs:
             pcm_name: 'hw:1,0'

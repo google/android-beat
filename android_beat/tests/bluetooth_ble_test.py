@@ -27,18 +27,7 @@ class BluetoothBleTest(base_test.BaseTestClass):
 
   _BLUETOOTH_MODE = base_test.BluetoothMode.CLASSIC
   _ANDROID_DEVICE_AMOUNT = base_test.AndroidDeviceAmount.TWO_DEVICES
-  _MEDIA_FILES_BASENAMES = ('sine_tone_0.wav',)
-  _MEDIA_FILES_PATHS = ('/sdcard/Download/sine_tone_0.wav',)
-
-  def setup_class(self) -> None:
-    super().setup_class()
-    self.ad_ref = self.ads[1]
-    self.ad_ref_address = self.ad_ref.bt_snippet.btGetAddress()
-    audio_utils.generate_and_push_audio_files(
-        self.ad,
-        self._MEDIA_FILES_BASENAMES,
-        self.current_test_info.output_path,
-    )
+  _HAS_MEDIA = True
 
   def setup_test(self) -> None:
     self.bt_device.factory_reset()
@@ -94,6 +83,9 @@ class BluetoothBleTest(base_test.BaseTestClass):
       1. DUT can connect with the BLE device and Android reference device.
       2. DUT can sync data from the connected devices.
     """
+    if self.ad_ref is None:
+      raise ValueError('Android reference device is not provided.')
+
     # BLE device starts pairing mode.
     bluetooth_utils.start_pairing_mode(
         self.bt_device, timeout=_BLUETOOTH_DISCOVERY_TIMEOUT
@@ -168,7 +160,7 @@ class BluetoothBleTest(base_test.BaseTestClass):
     # is discovered.
     test_utils.wait_until_or_assert(
         condition=lambda: bluetooth_utils.is_bt_device_discovered(
-            self.ad, self.ad_ref_address
+            self.ad, self.ad_ref.bt_address
         ),
         error_msg='Failed to discover Android reference device',
         timeout=_BLUETOOTH_DISCOVERY_TIMEOUT,
@@ -186,7 +178,7 @@ class BluetoothBleTest(base_test.BaseTestClass):
       gatt_utils.assert_gatt_server_services_added(server_callback_ad_ref)
       # DUT connects to Android reference device GATT.
       client_callback_ad_ref = self.ad.bt_snippet.bleConnectGatt(
-          self.ad_ref_address
+          self.ad_ref.bt_address
       )
       gatt_utils.assert_gatt_client_connected(client_callback_ad_ref)
       # DUT check what GATT services the Android reference device provides.
@@ -213,7 +205,7 @@ class BluetoothBleTest(base_test.BaseTestClass):
           ),
       )
     finally:
-      self.ad_ref.bt_snippet.bleCancelConnectionByAddress(self.ad_address)
+      self.ad_ref.bt_snippet.bleCancelConnectionByAddress(self.ad.bt_address)
       if client_callback_ad_ref is not None:
         self.ad.bt_snippet.bleDisconnect()
         gatt_utils.assert_gatt_client_disconnected(client_callback_ad_ref)
@@ -291,7 +283,7 @@ class BluetoothBleTest(base_test.BaseTestClass):
     )
 
     # Play local media on DUT.
-    self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_FILES_PATHS[0])
+    self.ad.bt_snippet.media3StartLocalFile(self._MEDIA_PLAYLIST_PATHS[0])
 
     # Verify the media is playing and routed to the connected device.
     bluetooth_utils.wait_and_assert_a2dp_playback_state(
@@ -369,6 +361,9 @@ class BluetoothBleTest(base_test.BaseTestClass):
       2. Android reference device can read data from the DUT.
       3. GATT Connection is stable.
     """
+    if self.ad_ref is None:
+      raise ValueError('Android reference device is not provided.')
+
     # DUT starts pairing mode.
     bluetooth_utils.start_pairing_mode(
         self.ad, timeout=_BLUETOOTH_DISCOVERY_TIMEOUT
@@ -378,7 +373,7 @@ class BluetoothBleTest(base_test.BaseTestClass):
     # is discovered.
     test_utils.wait_until_or_assert(
         condition=lambda: bluetooth_utils.is_bt_device_discovered(
-            self.ad_ref, self.ad_address
+            self.ad_ref, self.ad.bt_address
         ),
         error_msg='Failed to discover Android reference device',
         timeout=_BLUETOOTH_DISCOVERY_TIMEOUT,
@@ -396,7 +391,9 @@ class BluetoothBleTest(base_test.BaseTestClass):
       gatt_utils.assert_gatt_server_services_added(server_callback)
 
       # Android reference device connects to DUT with GATT client.
-      client_callback = self.ad_ref.bt_snippet.bleConnectGatt(self.ad_address)
+      client_callback = self.ad_ref.bt_snippet.bleConnectGatt(
+          self.ad.bt_address
+      )
       gatt_utils.assert_gatt_client_connected(client_callback)
 
       # Android reference device check what GATT services the DUT provides.
@@ -432,7 +429,7 @@ class BluetoothBleTest(base_test.BaseTestClass):
       )
 
     finally:
-      self.ad.bt_snippet.bleCancelConnectionByAddress(self.ad_ref_address)
+      self.ad.bt_snippet.bleCancelConnectionByAddress(self.ad_ref.bt_address)
       if client_callback is not None:
         self.ad_ref.bt_snippet.bleDisconnect()
         gatt_utils.assert_gatt_client_disconnected(client_callback)
@@ -470,6 +467,9 @@ class BluetoothBleTest(base_test.BaseTestClass):
       2. Android reference device can write data to the DUT.
       3. GATT Connection is stable.
     """
+    if self.ad_ref is None:
+      raise ValueError('Android reference device is not provided.')
+
     # DUT starts pairing mode.
     bluetooth_utils.start_pairing_mode(
         self.ad, timeout=_BLUETOOTH_DISCOVERY_TIMEOUT
@@ -479,7 +479,7 @@ class BluetoothBleTest(base_test.BaseTestClass):
     # is discovered.
     test_utils.wait_until_or_assert(
         condition=lambda: bluetooth_utils.is_bt_device_discovered(
-            self.ad_ref, self.ad_address
+            self.ad_ref, self.ad.bt_address
         ),
         error_msg='Failed to discover Android reference device',
         timeout=_BLUETOOTH_DISCOVERY_TIMEOUT,
@@ -497,7 +497,9 @@ class BluetoothBleTest(base_test.BaseTestClass):
       gatt_utils.assert_gatt_server_services_added(server_callback)
 
       # Android reference device connects to DUT with GATT Client.
-      client_callback = self.ad_ref.bt_snippet.bleConnectGatt(self.ad_address)
+      client_callback = self.ad_ref.bt_snippet.bleConnectGatt(
+          self.ad.bt_address
+      )
       gatt_utils.assert_gatt_client_connected(client_callback)
 
       # DUT check what GATT services the DUT provides.
@@ -540,7 +542,7 @@ class BluetoothBleTest(base_test.BaseTestClass):
       )
 
     finally:
-      self.ad.bt_snippet.bleCancelConnectionByAddress(self.ad_ref_address)
+      self.ad.bt_snippet.bleCancelConnectionByAddress(self.ad_ref.bt_address)
       if client_callback is not None:
         self.ad_ref.bt_snippet.bleDisconnect()
         gatt_utils.assert_gatt_client_disconnected(client_callback)
