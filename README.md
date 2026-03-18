@@ -202,18 +202,7 @@ environment:
   ```
 
 ### Run Whole Test Suites
-<style>
-  table {
-    width: 100%;
-    max-width: 1200px;
-    border-collapse: collapse;
-  }
-  th, td {
-    border: 1px solid #ddd;
-    padding: 12px;
-    text-align: left;
-  }
-</style>
+
 | Profile \ Features | Standard (No SIM) | With Calls (SIM Required) |
 | :--- | :--- | :--- |
 | **LE Audio** | LE Audio test suite | LE Audio with call test suite |
@@ -310,7 +299,7 @@ You could upload the results to Google’s test result store, this bring 2 benef
 
 When you open a BTX link, you should see the following dashboard.
 
-![target](btx_target.png)
+![target](android_beat/btx_target.png)
 
 1. Use this checkbox to show/hide test cases based on status (e.g. Failed,
    Passed, Skipped).
